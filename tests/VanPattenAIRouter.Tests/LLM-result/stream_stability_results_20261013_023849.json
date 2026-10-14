@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-10-13T02:38:49.236568+00:00",
+  "scenarios": [
+    {
+      "scenario_name": "vanpatten/auto",
+      "total_chunks": 5602,
+      "content_length": 40681,
+      "duration": 295.8147430419922,
+      "time_to_first_chunk": 20.212335109710693,
+      "slow_chunks": 0,
+      "disconnects": 0,
+      "empty_streams": false,
+      "errors": [],
+      "success": true
+    },
+    {
+      "scenario_name": "vanpatten/auto-free",
+      "total_chunks": 2526,
+      "content_length": 21795,
+      "duration": 301.00040578842163,
+      "time_to_first_chunk": 31.876001834869385,
+      "slow_chunks": 8,
+      "disconnects": 1,
+      "empty_streams": false,
+      "errors": [
+        "Request timeout"
+      ],
+      "success": false
+    },
+    {
+      "scenario_name": "vanpatten/auto",
+      "total_chunks": 4557,
+      "content_length": 32572,
+      "duration": 284.4410390853882,
+      "time_to_first_chunk": 27.790688037872314,
+      "slow_chunks": 2,
+      "disconnects": 0,
+      "empty_streams": false,
+      "errors": [],
+      "success": true
+    }
+  ]
+}

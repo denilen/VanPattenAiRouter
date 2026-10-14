@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  vanpatten-airrouter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "10080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./data:/app/data
+      - ./src/appsettings.json:/app/appsettings.json:ro
+      - ./src/appsettings.Development.json:/app/appsettings.Development.json:ro
+    restart: unless-stopped
+
+    # Optional: Ollama for local models
+#   ollama:
+#     image: ollama/ollama:latest
+#     ports:
+#       - "11434:11434"
+#     volumes:
+#       - ollama_data:/root/.ollama
+#     restart: unless-stopped
+#     profiles:
+#       - local
+
+# volumes:
+#   ollama_data:
