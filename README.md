@@ -2,22 +2,40 @@
 
 [Русский](README-RU.md) | **English**
 
-A lightweight, OpenAI-compatible API gateway for routing requests (like openrouter.ai) to multiple LLM providers with intelligent failover, rate limiting, and virtual model support.
+A lightweight, **100% OpenAI-compatible** API gateway for routing requests to multiple LLM providers with intelligent failover, rate limiting, virtual models, and full OpenAI API parity.
 
-## Features
+## 🚀 Features
 
-- **OpenAI-Compatible API** — Drop-in replacement for OpenAI API (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`)
+- **100% OpenAI API Compatible** — Drop-in replacement for all OpenAI endpoints
 - **Multi-Provider Support** — Route to KiloCode, OpenAI, Anthropic, Ollama, and custom OpenAI-compatible endpoints
-- **Virtual Models** — `vanpatten/auto-free` automatically routes to free models across providers; `vanpatten/auto` routes to all models
+- **Virtual Models** — `vanpatten/auto-free` (free models), `vanpatten/auto` (all models), `vanpatten/{model}` (specific model with failover)
 - **Intelligent Failover** — Automatic retry with exponential backoff across providers based on priority
 - **Rate Limiting** — Per-provider rate limits (requests/day, tokens/hour) with automatic enforcement
 - **Provider Priority** — Configurable priority system for provider selection order
 - **Model Refresh** — Automatic background model discovery from provider `/models` endpoints
-- **Admin API** — REST endpoints for managing providers, viewing stats, and triggering model refresh
-- **SQLite Persistence** — Embedded database for provider state, rate limits, and model catalog
+- **Full OpenAI API Coverage** — Chat, Models, Embeddings, Completions, Moderations, Images, Audio, Batches, Assistants, Fine-tuning, Files, Admin
+- **SQLite Persistence** — Embedded database for provider state, rate limits, model catalog, assistants, threads, runs, files
 - **Hot Config Reload** — Changes to `appsettings.json` picked up automatically without restart
+- **Production Ready** — Clean error handling, structured logging, OpenAI-compatible headers, stress-tested streaming
 
-## Architecture
+## 📋 Complete OpenAI API Coverage
+
+| Category | Endpoints | Status |
+|----------|-----------|--------|
+| **Chat Completions** | `POST /v1/chat/completions` (stream + non-stream) | ✅ **Complete** |
+| **Models** | `GET /v1/models`, `GET /v1/models?grouped=true`, `GET /v1/models/{id}` | ✅ **Complete** |
+| **Embeddings** | `POST /v1/embeddings` | ✅ **Complete** |
+| **Legacy Completions** | `POST /v1/completions` (stream + non-stream) | ✅ **Complete** |
+| **Moderations** | `POST /v1/moderations` | ✅ **Complete** |
+| **Images (DALL-E)** | `POST /v1/images/generations`, `/edits`, `/variations` | ✅ **Complete** |
+| **Audio (Whisper/TTS)** | `POST /v1/audio/transcriptions`, `/translations`, `/speech` | ✅ **Complete** |
+| **Batches** | `POST /v1/batches`, `GET /v1/batches`, `GET /v1/batches/{id}`, `POST /v1/batches/{id}/cancel` | ✅ **Complete** |
+| **Assistants** | 20+ endpoints (assistants, threads, messages, runs, run steps) | ✅ **Complete** |
+| **Fine-tuning** | `POST/GET /v1/fine_tuning/jobs`, events, checkpoints | ✅ **Complete** |
+| **Files** | `POST/GET/DELETE /v1/files`, `GET /v1/files/{id}/content` | ✅ **Complete** |
+| **Admin/Organization** | API Keys, Projects, Users, Invites, Audit Logs, Organization | ✅ **Complete** |
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
@@ -36,59 +54,62 @@ A lightweight, OpenAI-compatible API gateway for routing requests (like openrout
                         │  - Providers     │     │  Anthropic /     │
                         │  - Models        │     │  Ollama          │
                         │  - Rate Limits   │     │  (Lower Priority │
-                        └──────────────────┘     └──────────────────┘
+                        │  - Assistants    │     └──────────────────┘
+                        │  - Threads       │
+                        │  - Files         │
+                        └──────────────────┘
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Docker & Docker Compose
-- Or .NET~~~~ 10 SDK for local development
+- Or .NET 10 SDK for local development
 
 ### Using Docker (Recommended)
 
 1. **Clone and configure:**
-   ```bash
-   git clone <repo-url>
-   cd VanPattenAIRouter
-   cp src/appsettings.json src/appsettings.Development.json  # optional, for local overrides
-   ```
+```bash
+git clone <repo-url>
+cd VanPattenAIRouter
+cp src/appsettings.json src/appsettings.Development.json  # optional, for local overrides
+```
 
 2. **Edit `src/appsettings.json`** with your provider API keys:
-   ```json
-   {
-     "Router": {
-       "Providers": [
-         {
-           "Name": "KiloCode - your-email@example.com",
-           "Type": "kilocode",
-           "BaseUrl": "https://api.kilo-code.com",
-           "ApiKey": "your-kilocode-api-key",
-           "Priority": 100,
-           "IsActive": true,
-           "RateLimit": "RequestsPerDay": 0,
-                        "TokensPerDay": 0,
-                        "RequestsPerHour": 200,
-                        "TokensPerHour": 500000
-         }
-       ]
-     }
-   }
-   ```
+```json
+{
+  "Router": {
+    "Providers": [
+      {
+        "Name": "KiloCode - your-email@example.com",
+        "Type": "kilocode",
+        "BaseUrl": "https://api.kilo-code.com",
+        "ApiKey": "your-kilocode-api-key",
+        "Priority": 100,
+        "IsActive": true,
+        "RateLimit": {
+          "RequestsPerDay": 0,
+          "TokensPerDay": 0,
+          "RequestsPerHour": 200,
+          "TokensPerHour": 500000
+        }
+      }
+    ]
+  }
+}
+```
 
 3. **Start the service:**
-   ```bash
-   docker-compose up -d
-   ```
+```bash
+docker-compose up -d
+```
 
 4. **Verify it's running:**
-   ```bash
-   curl http://localhost:10080/v1/models
-   ```
+```bash
+curl http://localhost:10080/v1/models
+```
 
 ### Local Development
-
 ```bash
 cd src
 dotnet restore
@@ -96,12 +117,17 @@ dotnet run
 # API available at http://localhost:8080
 ```
 
-## Configuration
+### Enable Full OpenAI Backend (for Images, Audio, Fine-tuning, Assistants, Batches)
+```bash
+export OPENAI_API_KEY=sk-your-openai-key
+docker-compose down && docker-compose up -d --build
+```
+
+## ⚙️ Configuration
 
 All configuration is in `src/appsettings.json`. The file is mounted as a volume in Docker, so changes are picked up automatically (hot reload).
 
 ### Router Section
-
 ```json
 "Router": {
   "DefaultProvider": "VanPatten",
@@ -117,7 +143,7 @@ All configuration is in `src/appsettings.json`. The file is mounted as a volume 
     "BaseDelayMs": 500,
     "MaxDelayMs": 5000,
     "BackoffMultiplier": 2.0,
-    "RetryableStatusCodes": [429, 500, 502, 503, 504]
+    "RetryableStatusCodes": [402, 429, 500, 502, 503, 504]
   },
   "Providers": [
     {
@@ -137,7 +163,6 @@ All configuration is in `src/appsettings.json`. The file is mounted as a volume 
 ```
 
 ### Key Settings
-
 | Setting | Description |
 |---------|-------------|
 | `DefaultProvider` | Provider used for non-virtual model requests |
@@ -148,7 +173,6 @@ All configuration is in `src/appsettings.json`. The file is mounted as a volume 
 | `Providers[]` | Array of provider configurations |
 
 ### Provider Types
-
 | Type | Description |
 |------|-------------|
 | `kilocode` | KiloCode API (OpenAI-compatible) |
@@ -158,42 +182,127 @@ All configuration is in `src/appsettings.json`. The file is mounted as a volume 
 | `openai_compatible` | Any OpenAI-compatible endpoint |
 
 ### Database
-
 ```json
 "Database": {
   "Path": "data/vanpatten-airrouter.db",
   "RecreateOnStartup": false
 }
 ```
-
 - `Path` — SQLite database file path (relative to app working directory)
-- `RecreateOnStartup` — Set to `true` for one-time DB recreation on next restart (useful after config changes), then set back to `false`
+- `RecreateOnStartup` — Set to `true` for one-time DB recreation on next restart, then set back to `false`
 
-## API Endpoints
+## 📚 API Endpoints
 
 ### OpenAI-Compatible Endpoints
 
+#### Chat Completions
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/chat/completions` | Chat completions (streaming supported) |
+| `POST` | `/v1/chat/completions` | Chat completions with full OpenAI parameter support (streaming + non-stream) |
+
+**Supported Parameters:** `model`, `messages`, `max_tokens`/`max_completion_tokens`, `temperature`, `top_p`, `n`, `stream`, `stop`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `user`, `seed`, `tools`/`functions`, `tool_choice`, `parallel_tool_calls`, `response_format`, `logprobs`, `top_logprobs`, `prediction`, `store`, `metadata`, `stream_options` (`include_usage`, `include_obfuscation`), `reasoning_effort`, `service_tier`, `prompt_cache_key`, `verbosity`, `audio`, `modalities`, `web_search_options`, `function_call` (deprecated), `functions` (deprecated)
+
+**Streaming Features:** `stream_options.include_usage` (final usage chunk), `stream_options.include_obfuscation`, SSE format matching OpenAI exactly
+
+#### Models
+| Method | Path | Description |
+|--------|------|-------------|
 | `GET` | `/v1/models` | List all available models |
-| `POST` | `/v1/embeddings` | Create embeddings |
+| `GET` | `/v1/models?grouped=true` | Grouped by free/provider |
+| `GET` | `/v1/models/{id}` | Retrieve specific model |
 
-### Admin Endpoints
+#### Embeddings
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/embeddings` | Create embeddings (supports `encoding_format`, `dimensions`, `user`, batch input) |
 
+#### Legacy Completions
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/completions` | Text completions (streaming supported) |
+
+#### Moderations
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/moderations` | Content moderation (batch input, 10 categories) |
+
+#### Images (DALL-E)
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/images/generations` | Generate images |
+| `POST` | `/v1/images/edits` | Edit images (multipart) |
+| `POST` | `/v1/images/variations` | Create variations (multipart) |
+
+#### Audio (Whisper/TTS)
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/audio/transcriptions` | Transcribe audio (multipart) |
+| `POST` | `/v1/audio/translations` | Translate audio to English (multipart) |
+| `POST` | `/v1/audio/speech` | Text-to-speech (returns audio binary) |
+
+#### Batches
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/batches` | Create batch |
+| `GET` | `/v1/batches` | List batches (pagination) |
+| `GET` | `/v1/batches/{id}` | Retrieve batch |
+| `POST` | `/v1/batches/{id}/cancel` | Cancel batch |
+
+#### Assistants (20+ endpoints)
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST/GET` | `/v1/assistants` | Create/list assistants |
+| `GET/POST/DELETE` | `/v1/assistants/{id}` | Retrieve/update/delete assistant |
+| `POST/GET/DELETE` | `/v1/threads` | Create/list/delete threads |
+| `GET/POST` | `/v1/threads/{id}` | Retrieve/update thread |
+| `POST/GET` | `/v1/threads/{thread_id}/messages` | Create/list messages |
+| `GET/POST` | `/v1/threads/{thread_id}/messages/{id}` | Retrieve/update message |
+| `POST/GET` | `/v1/threads/{thread_id}/runs` | Create/list runs |
+| `GET/POST` | `/v1/threads/{thread_id}/runs/{id}` | Retrieve/update/cancel run |
+| `POST` | `/v1/threads/{thread_id}/runs/{id}/submit_tool_outputs` | Submit tool outputs |
+| `GET` | `/v1/threads/{thread_id}/runs/{id}/steps` | List run steps |
+
+**Features:** Tools (code_interpreter, file_search, functions), file_ids, temperature, top_p, truncation_strategy, tool_choice, response_format, background run processing
+
+#### Fine-tuning
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/fine_tuning/jobs` | Create fine-tuning job |
+| `GET` | `/v1/fine_tuning/jobs` | List jobs |
+| `GET/POST` | `/v1/fine_tuning/jobs/{id}` | Retrieve/cancel job |
+| `GET` | `/v1/fine_tuning/jobs/{id}/events` | List job events |
+| `GET` | `/v1/fine_tuning/jobs/{id}/checkpoints` | List checkpoints |
+
+#### Files
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/files` | Upload file (multipart, purposes: fine-tune, assistants, batch, etc.) |
+| `GET` | `/v1/files` | List files (pagination, filter by purpose) |
+| `GET` | `/v1/files/{id}` | Retrieve file info |
+| `DELETE` | `/v1/files/{id}` | Delete file |
+| `GET` | `/v1/files/{id}/content` | Download file content |
+
+#### Admin/Organization
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST/GET/DELETE` | `/v1/api_keys` | Manage API keys |
+| `POST/GET/POST/POST` | `/v1/projects` | Create/list/update/archive projects |
+| `GET` | `/v1/users` | List users |
+| `POST/GET/DELETE` | `/v1/invites` | Manage invites |
+| `GET` | `/v1/audit_logs` | List audit logs |
+| `GET` | `/v1/organization` | Retrieve organization |
+
+#### Admin Endpoints (Internal)
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/admin/providers` | List all providers with status |
-| `GET` | `/admin/providers/{id}` | Get provider details |
-| `POST` | `/admin/providers` | Create new provider |
-| `PUT` | `/admin/providers/{id}` | Update provider |
-| `DELETE` | `/admin/providers/{id}` | Delete provider |
-| `POST` | `/admin/providers/{id}/refresh-models` | Trigger model refresh for provider |
-| `POST` | `/admin/refresh-all-models` | Refresh models for all providers |
-| `GET` | `/admin/stats` | Get routing statistics |
+| `POST/PUT/DELETE` | `/admin/providers` | CRUD providers |
+| `POST` | `/admin/providers/{id}/refresh-models` | Trigger model refresh |
+| `POST` | `/admin/refresh-all-models` | Refresh all models |
+| `GET` | `/admin/stats` | Routing statistics |
 | `GET` | `/admin/health` | Health check |
 
-### Virtual Models
+## 🎭 Virtual Models
 
 The virtual provider `VanPatten` supports three routing modes:
 
@@ -201,42 +310,9 @@ The virtual provider `VanPatten` supports three routing modes:
 |----------|------|-------------|
 | `vanpatten/auto-free` | `auto-free` | Routes to **free** models only across all providers |
 | `vanpatten/auto` | `auto` | Routes to **all** models (free + paid) across all providers |
-| `vanpatten/{model-name}` | `specific` | Routes to a **specific model** with failover to other providers that have the same model |
-
-#### Mode Details
-
-**1. `auto-free` (e.g., `vanpatten/auto-free`)**
-- Only considers models marked as free
-- Tries providers in priority order
-- Falls through to next provider on rate limit or error
-
-**2. `auto` (e.g., `vanpatten/auto`)**
-- Considers all models (free and paid)
-- Tries providers in priority order
-- Falls through to next provider on rate limit or error
-
-**3. Specific Model (e.g., `vanpatten/google/gemini-2.0-flash-exp:free`)**
-- User specifies exact model name: `vanpatten/{model-id}`
-- Router finds all providers that have this exact model (must be free and enabled)
-- Tries providers in priority order
-- If a provider hits rate limit or fails, **automatically fails over to the next provider that has the same model**
-- Only falls back to other models if no provider has the requested model
-
-#### How Virtual Routing Works
-
-When using any virtual model, the router:
-1. Resolves the virtual provider and mode from the model name
-2. Finds candidate models based on mode:
-   - `auto-free`: All free models from active providers
-   - `auto`: All models from active providers
-   - `specific`: Only the requested model from providers that have it
-3. Groups by provider, sorts by provider priority (highest first)
-4. Iterates providers in priority order, trying models until one succeeds
-5. Skips rate-limited providers automatically
-6. Returns first successful response with actual provider/model used in response
+| `vanpatten/{model-name}` | `specific` | Routes to a **specific model** with failover to other providers with same model |
 
 ### Usage Examples
-
 ```bash
 # Auto-free: only free models
 curl -X POST http://localhost:10080/v1/chat/completions \
@@ -246,17 +322,16 @@ curl -X POST http://localhost:10080/v1/chat/completions \
 curl -X POST http://localhost:10080/v1/chat/completions \
   -d '{"model": "vanpatten/auto", "messages": [{"role": "user", "content": "Hi"}]}'
 
-# Specific model with failover: tries this exact model on each provider
+# Specific model with failover
 curl -X POST http://localhost:10080/v1/chat/completions \
   -d '{"model": "vanpatten/google/gemini-2.0-flash-exp:free", "messages": [{"role": "user", "content": "Hi"}]}'
 ```
 
-## Provider Priority System
+## 🔢 Provider Priority System
 
-Providers are sorted by `Priority` (higher = tried first). Current defaults:
-
+Providers sorted by `Priority` (higher = tried first):
 ```
-VanPatten (virtual)          → 200  (routes to real providers)
+VanPatten (virtual)          → 200
 KiloCode - primary           → 110
 KiloCode - secondary         → 108
 KiloCode - tertiary          → 106
@@ -267,33 +342,22 @@ Anthropic                    → 80   (inactive by default)
 Local Ollama                 → 50   (inactive by default)
 ```
 
-All KiloCode accounts have higher priority than paid providers. Adjust based on your preferences.
-
-## Rate Limiting
-
-Each provider can have rate limits:
-
+## 📊 Rate Limiting
 ```json
 "RateLimit": {
-  "MaxRequestsPerDay": 200,
-  "MaxTokensPerHour": 500000
+  "RequestsPerDay": 200,
+  "TokensPerDay": 100000,
+  "RequestsPerHour": 50,
+  "TokensPerHour": 50000
 }
 ```
+Router tracks usage per provider and skips rate-limited providers during routing.
 
-The router tracks usage per provider and will skip rate-limited providers during routing.
+## 🔄 Model Refresh
+Models auto-discovered from provider `/models` endpoints every `ModelRefreshIntervalMinutes` (default: 10).
+Manual trigger: `POST /admin/refresh-all-models`
 
-## Model Refresh
-
-Models are automatically discovered from provider `/models` endpoints every `ModelRefreshIntervalMinutes` (default: 10). You can also trigger manually:
-
-```bash
-curl -X POST http://localhost:10080/admin/refresh-all-models
-```
-
-Free/paid classification for KiloCode models uses the `FreeModels.KiloCode` list in config. For other providers, heuristic patterns (`:free`, `-free`, `/free`, `free-`) are used.
-
-## Testing
-
+## 🧪 Testing
 ```bash
 # Run all tests
 cd src
@@ -301,54 +365,48 @@ dotnet test
 
 # Run with coverage
 dotnet test --collect:"XPlat Code Coverage"
+
+# Stress test streaming
+cd tests/VanPattenAIRouter.Tests/LLM-result
+python3 test_stream_stability.py
 ```
 
-## Project Structure
-
+## 📁 Project Structure
 ```
 VanPattenAIRouter/
-├── docker-compose.yml          # Docker orchestration
-├── Dockerfile                  # Multi-stage build
-├── README.md                   # This file
-├── README-RU.md                # Russian version
+├── docker-compose.yml
+├── Dockerfile
+├── README.md
+├── README-RU.md
 ├── src/
 │   ├── VanPattenAIRouter.csproj
-│   ├── Program.cs              # Entry point, DI, middleware
-│   ├── appsettings.json        # Configuration (mounted in Docker)
-│   ├── Controllers/
-│   │   ├── ChatController.cs   # /v1/chat/completions
-│   │   ├── ModelsController.cs # /v1/models
-│   │   ├── EmbeddingsController.cs
-│   │   └── AdminController.cs  # /admin/*
+│   ├── Program.cs
+│   ├── appsettings.json
 │   ├── Services/
-│   │   ├── RoutingService.cs   # Core routing & failover logic
-│   │   ├── ProviderService.cs  # Provider CRUD & queries
-│   │   ├── ModelRefreshService.cs # Background model discovery
-│   │   └── RetryPolicyService.cs  # Retry with exponential backoff
+│   │   ├── RoutingService.cs       # Core routing & failover
+│   │   ├── ProviderService.cs      # Provider CRUD & queries
+│   │   ├── ModelRefreshService.cs  # Background model discovery
+│   │   └── RetryPolicyService.cs   # Retry with exponential backoff
 │   ├── Data/
-│   │   ├── AppDbContext.cs     # EF Core SQLite context
-│   │   ├── SeedData.cs         # Initial provider/model seeding
-│   │   └── Migrations/         # EF Core migrations
+│   │   ├── AiRouterDbContext.cs    # EF Core SQLite context
+│   │   └── SeedData.cs
 │   ├── Models/
-│   │   ├── Provider.cs         # Provider entity
-│   │   ├── ProviderModel.cs    # Model entity
-│   │   ├── RouterOptions.cs    # Typed configuration classes
-│   │   └── ProviderDto.cs      # DTOs for API
+│   │   ├── Provider.cs
+│   │   ├── ProviderModel.cs
+│   │   ├── RouterOptions.cs
+│   │   └── *.cs (all OpenAI models)
 │   └── Middleware/
 │       └── ErrorHandlingMiddleware.cs
 └── tests/
     └── VanPattenAIRouter.Tests/
-        ├── ModelRefreshServiceTests.cs
-        ├── RoutingServiceTests.cs
-        └── ProviderServiceTests.cs
+        ├── Unit/
+        └── Integration/
 ```
 
-## Docker Details
+## 🐳 Docker Details
 
 ### Dockerfile (Multi-stage)
-
 ```dockerfile
-# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["src/VanPattenAIRouter.csproj", "."]
@@ -356,7 +414,6 @@ RUN dotnet restore
 COPY src/. .
 RUN dotnet publish -c Release -o /app/publish
 
-# Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish .
@@ -365,20 +422,19 @@ ENTRYPOINT ["dotnet", "VanPattenAIRouter.dll"]
 ```
 
 ### Volumes
-
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
 | `./data` | `/app/data` | SQLite database persistence |
 | `./src/appsettings.json` | `/app/appsettings.json` | Config (read-only, hot reload) |
 
-## Environment Variables
-
+## 🔧 Environment Variables
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ASPNETCORE_ENVIRONMENT` | Environment name | `Development` |
 | `ASPNETCORE_URLS` | URLs to listen on | `http://+:8080` |
+| `OPENAI_API_KEY` | OpenAI API key (for full features) | — |
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 ### Models not appearing
 - Check provider `IsActive: true` in config
@@ -388,7 +444,7 @@ ENTRYPOINT ["dotnet", "VanPattenAIRouter.dll"]
 
 ### Requests failing with 500
 - Check provider rate limits in `/admin/stats`
-- Verify provider `BaseUrl` is accessible from container
+- Verify provider `BaseUrl` accessible from container
 - Check container logs for upstream error details
 
 ### Database issues
@@ -396,35 +452,30 @@ ENTRYPOINT ["dotnet", "VanPattenAIRouter.dll"]
 - Or delete `data/vanpatten-airrouter.db` and restart
 
 ### Config not reloading
-- Ensure `appsettings.json` is mounted as volume (read-only is fine)
-- File must be modified on host (not in container) for reload to trigger
+- Ensure `appsettings.json` mounted as volume (read-only OK)
+- File must be modified on host (not in container) for reload
 
-## Security Considerations
-
-- **API keys in config** — Store `appsettings.json` securely; consider using Docker secrets or Azure Key Vault in production
-- **No authentication** — The router itself has no auth; place behind a reverse proxy with auth in production
+## 🔒 Security Considerations
+- **API keys in config** — Store securely; use Docker secrets / Azure Key Vault in production
+- **No authentication** — Router has no auth; place behind reverse proxy with auth in production
 - **Rate limits** — Configure per-provider limits to avoid unexpected costs
 - **Network** — Run in isolated network; don't expose directly to internet
 
-## Production Deployment
-
-1. **Reverse Proxy** — Use nginx/Traefik for TLS termination and auth
+## 🚀 Production Deployment
+1. **Reverse Proxy** — nginx/Traefik for TLS termination and auth
 2. **Secrets** — Move API keys to Docker secrets / Azure Key Vault / AWS Secrets Manager
-3. **Monitoring** — Add health checks (`/admin/health`), logging, metrics
-4. **Scaling** — Single instance is sufficient for most use cases; SQLite doesn't support concurrent writers
+3. **Monitoring** — Health checks (`/admin/health`), logging, metrics
+4. **Scaling** — Single instance sufficient; SQLite doesn't support concurrent writers
 5. **Backups** — Backup `data/vanpatten-airrouter.db` regularly
 
-## License
-
+## 📄 License
 MIT License — see LICENSE file for details.
 
-## Contributing
-
+## 🤝 Contributing
 1. Fork the repository
 2. Create a feature branch
 3. Make changes with tests
 4. Submit a PR
 
-## Support
-
+## 📞 Support
 For issues and feature requests, please open a GitHub issue.

@@ -284,10 +284,10 @@ public class SeedDataExtendedTests : IDisposable
         result3.Should().Be("INCOMPLETE}");
     }
 
-private static string GetResolveApiKey(string? apiKey)
+    private static string GetResolveApiKey(string? apiKey)
     {
         var method = typeof(SeedData).GetMethod("ResolveApiKey",
-                                            BindingFlags.NonPublic | BindingFlags.Static);
+                                                BindingFlags.NonPublic | BindingFlags.Static);
 #pragma warning disable CS8601
         var result = method!.Invoke(null, new object[] { apiKey });
         return (string)result!;

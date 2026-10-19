@@ -5,12 +5,12 @@ Tests the vanpatten/{model-name} virtual model which routes to a specific model
 with failover to other providers that have the same model.
 """
 
-import asyncio
 import aiohttp
+import asyncio
 import json
 import os
-from typing import Dict, Any, List
 from dataclasses import dataclass
+from typing import Dict, Any, List
 
 # Configuration
 BASE_URL = os.getenv("VANPATTEN_API_URL", "http://localhost:10080")
@@ -23,12 +23,14 @@ TEST_MODELS = [
     "mistralai/mistral-7b-instruct:free",
 ]
 
+
 @dataclass
 class TestResult:
     test_name: str
     success: bool
     response: Dict[str, Any]
     error: str = ""
+
 
 class VanPattenSpecificModelTester:
     def __init__(self, base_url: str = BASE_URL, api_key: str = API_KEY):
@@ -133,7 +135,7 @@ class VanPattenSpecificModelTester:
         """Test a specific model with failover."""
         results = []
         virtual_model = f"vanpatten/{model_name}"
-        
+
         print(f"\n=== Testing Specific Model: {virtual_model} ===")
 
         # Test 1: Check if model exists on multiple providers via admin
@@ -184,23 +186,23 @@ class VanPattenSpecificModelTester:
         for i in range(3):
             result = await self.chat_completion(
                 model=f"vanpatten/{model_name}",
-                messages=[{"role": "user", "content": f"Simple Python test {i+1}"}],
+                messages=[{"role": "user", "content": f"Simple Python test {i + 1}"}],
                 stream=False
             )
             results.append(result)
             status = "✓" if result.success else "✗"
             actual_model = result.response.get("model", "unknown") if result.success else "N/A"
-            print(f"   {status} Request {i+1}: {actual_model}")
+            print(f"   {status} Request {i + 1}: {actual_model}")
 
         return results
 
     async def run_all_specific_model_tests(self) -> List[TestResult]:
         """Run tests for all configured models."""
         all_results = []
-        
-        print("="*60)
+
+        print("=" * 60)
         print("Testing vanpatten/{model-name} Specific Model Mode")
-        print("="*60)
+        print("=" * 60)
 
         # First check what models are available
         await self.list_models()
@@ -216,9 +218,9 @@ async def main():
     async with VanPattenSpecificModelTester() as tester:
         results = await tester.run_all_specific_model_tests()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST SUMMARY")
-    print("="*60)
+    print("=" * 60)
     passed = sum(1 for r in results if r.success)
     failed = len(results) - passed
     print(f"Total: {len(results)} | Passed: {passed} | Failed: {failed}")

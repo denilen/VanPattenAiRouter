@@ -95,4 +95,132 @@ public class ChatCompletionRequest
     /// </summary>
     [JsonPropertyName("user")]
     public string? User { get; set; }
+
+    // === OpenAI Extended Parameters (Phase 1) ===
+
+    /// <summary>
+    ///     The maximum number of completion tokens to generate. Alternative to max_tokens.
+    /// </summary>
+    [JsonPropertyName("max_completion_tokens")]
+    public int? MaxCompletionTokens { get; set; }
+
+    /// <summary>
+    ///     Streaming options (e.g., include_usage).
+    /// </summary>
+    [JsonPropertyName("stream_options")]
+    public ChatCompletionStreamOptions? StreamOptions { get; set; }
+
+    /// <summary>
+    ///     Configuration for predicted output (speculative decoding).
+    /// </summary>
+    [JsonPropertyName("prediction")]
+    public ChatCompletionPrediction? Prediction { get; set; }
+
+    /// <summary>
+    ///     Whether to store the conversation.
+    /// </summary>
+    [JsonPropertyName("store")]
+    public bool? Store { get; set; }
+
+    /// <summary>
+    ///     Whether to enable parallel function calling.
+    /// </summary>
+    [JsonPropertyName("parallel_tool_calls")]
+    public bool? ParallelToolCalls { get; set; }
+
+    /// <summary>
+    ///     Reasoning effort for reasoning models (low, medium, high).
+    /// </summary>
+    [JsonPropertyName("reasoning_effort")]
+    public string? ReasoningEffort { get; set; }
+
+    /// <summary>
+    ///     Service tier (auto, default, flex, priority).
+    /// </summary>
+    [JsonPropertyName("service_tier")]
+    public string? ServiceTier { get; set; }
+
+    /// <summary>
+    ///     Prompt cache key for caching.
+    /// </summary>
+    [JsonPropertyName("prompt_cache_key")]
+    public string? PromptCacheKey { get; set; }
+
+    /// <summary>
+    ///     Prompt cache options.
+    /// </summary>
+    [JsonPropertyName("prompt_cache_options")]
+    public object? PromptCacheOptions { get; set; }
+
+    /// <summary>
+    ///     Verbosity level (low, medium, high).
+    /// </summary>
+    [JsonPropertyName("verbosity")]
+    public string? Verbosity { get; set; }
+
+    /// <summary>
+    ///     Web search options.
+    /// </summary>
+    [JsonPropertyName("web_search_options")]
+    public object? WebSearchOptions { get; set; }
+
+    /// <summary>
+    ///     Audio input/output configuration.
+    /// </summary>
+    [JsonPropertyName("audio")]
+    public object? Audio { get; set; }
+
+    /// <summary>
+    ///     Output modalities (text, audio).
+    /// </summary>
+    [JsonPropertyName("modalities")]
+    public List<string>? Modalities { get; set; }
+
+    /// <summary>
+    ///     Moderation configuration.
+    /// </summary>
+    [JsonPropertyName("moderation")]
+    public object? Moderation { get; set; }
+
+    /// <summary>
+    ///     Safety identifier.
+    /// </summary>
+    [JsonPropertyName("safety_identifier")]
+    public string? SafetyIdentifier { get; set; }
+
+    /// <summary>
+    ///     Seed for deterministic sampling.
+    /// </summary>
+    [JsonPropertyName("seed")]
+    public int? Seed { get; set; }
+
+    /// <summary>
+    ///     Logit bias for token probabilities.
+    /// </summary>
+    [JsonPropertyName("logit_bias")]
+    public Dictionary<int, double>? LogitBias { get; set; }
+
+    /// <summary>
+    ///     Frequency penalty (-2.0 to 2.0).
+    /// </summary>
+    [JsonPropertyName("frequency_penalty")]
+    public double? FrequencyPenalty { get; set; }
+
+    /// <summary>
+    ///     Presence penalty (-2.0 to 2.0).
+    /// </summary>
+    [JsonPropertyName("presence_penalty")]
+    public double? PresencePenalty { get; set; }
+
+    /// <summary>
+    ///     Deprecated: Function call configuration (use tool_choice instead).
+    /// </summary>
+    [JsonPropertyName("function_call")]
+    public object? FunctionCall { get; set; }
+
+    /// <summary>
+    ///     Deprecated: Functions list (use tools instead).
+    /// </summary>
+    [JsonPropertyName("functions")]
+    public List<object>? Functions { get; set; }
 }

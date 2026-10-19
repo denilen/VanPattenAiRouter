@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-import asyncio
 import aiohttp
+import asyncio
 import json
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-
 
 COMPLEX_PROMPT = """
 You are an expert distributed systems engineer. Create a comprehensive Go implementation of a distributed consensus algorithm inspired by Raft and Paxos, with production-grade considerations.
@@ -89,11 +88,11 @@ class StreamMetrics:
 
 
 async def make_stream_request(
-    session: aiohttp.ClientSession,
-    model: str,
-    prompt: str,
-    max_tokens: int = 16384,
-    timeout: int = 300,
+        session: aiohttp.ClientSession,
+        model: str,
+        prompt: str,
+        max_tokens: int = 16384,
+        timeout: int = 300,
 ) -> StreamMetrics:
     metrics = StreamMetrics(scenario_name=model)
     metrics.start_time = time.time()
@@ -114,10 +113,10 @@ async def make_stream_request(
         }
 
         async with session.post(
-            "http://localhost:10080/v1/chat/completions",
-            json=payload,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=timeout),
+                "http://localhost:10080/v1/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:
             if response.status != 200:
                 error_text = await response.text()
@@ -203,11 +202,11 @@ async def make_stream_request(
 
 
 async def run_with_retry(
-    session: aiohttp.ClientSession,
-    model: str,
-    prompt: str,
-    max_retries: int = 2,
-    max_tokens: int = 16384,
+        session: aiohttp.ClientSession,
+        model: str,
+        prompt: str,
+        max_retries: int = 2,
+        max_tokens: int = 16384,
 ) -> StreamMetrics:
     last_error = None
     for attempt in range(max_retries + 1):
@@ -241,7 +240,8 @@ async def run_scenario(session: aiohttp.ClientSession, model: str, scenario_num:
     print(f"\n=== SCENARIO {scenario_num}/3: {model} ===")
     metrics = await run_with_retry(session, model, COMPLEX_PROMPT, max_retries=2, max_tokens=16384)
     print(f"Completed: {metrics.total_chunks} chunks, {metrics.content_length} chars, {metrics.duration:.2f}s")
-    print(f"  TTFC: {metrics.time_to_first_chunk:.3f}s, Slow chunks: {metrics.slow_chunks}, Disconnects: {metrics.disconnects}")
+    print(
+        f"  TTFC: {metrics.time_to_first_chunk:.3f}s, Slow chunks: {metrics.slow_chunks}, Disconnects: {metrics.disconnects}")
     if metrics.errors:
         print(f"  Errors: {metrics.errors}")
     print("=" * 60)
@@ -280,7 +280,8 @@ def print_summary(results: List[StreamMetrics]):
         print(f"   Chunks:           {r.total_chunks}")
         print(f"   Content Length:   {r.content_length:,} chars")
         print(f"   Duration:         {r.duration:.3f}s")
-        print(f"   Throughput:       {r.content_length / r.duration:.1f} chars/s" if r.duration > 0 else "   Throughput:       N/A")
+        print(
+            f"   Throughput:       {r.content_length / r.duration:.1f} chars/s" if r.duration > 0 else "   Throughput:       N/A")
         print(f"   TTFC:             {r.time_to_first_chunk:.3f}s")
         print(f"   Slow Chunks (>5s): {r.slow_chunks}")
         print(f"   Disconnects:      {r.disconnects}")
@@ -297,10 +298,13 @@ def print_summary(results: List[StreamMetrics]):
         if successful:
             avg_throughput = sum(r.content_length / r.duration for r in successful) / len(successful)
             print(f"   Avg Throughput:   {avg_throughput:.1f} chars/s")
-            print(f"   Best Throughput:  {max(r.content_length / r.duration for r in successful):.1f} chars/s ({successful[[r.content_length/r.duration for r in successful].index(max(r.content_length/r.duration for r in successful))].scenario_name})")
-        print(f"   Consistency Check: Scenario 1 ({results[0].scenario_name}) vs Scenario 3 ({results[2].scenario_name})")
+            print(
+                f"   Best Throughput:  {max(r.content_length / r.duration for r in successful):.1f} chars/s ({successful[[r.content_length / r.duration for r in successful].index(max(r.content_length / r.duration for r in successful))].scenario_name})")
+        print(
+            f"   Consistency Check: Scenario 1 ({results[0].scenario_name}) vs Scenario 3 ({results[2].scenario_name})")
         if results[0].success and results[2].success:
-            diff = abs((results[0].content_length / results[0].duration) - (results[2].content_length / results[2].duration))
+            diff = abs(
+                (results[0].content_length / results[0].duration) - (results[2].content_length / results[2].duration))
             print(f"     Throughput diff: {diff:.1f} chars/s")
     print("=" * 80)
 

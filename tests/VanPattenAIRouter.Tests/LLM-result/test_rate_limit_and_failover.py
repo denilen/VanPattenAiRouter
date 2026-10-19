@@ -4,17 +4,18 @@ LLM-Generated Test: VanPatten AI Router - Rate Limiting & Failover Test
 Comprehensive tests for rate limiting behavior, failover, and edge cases.
 """
 
-import asyncio
 import aiohttp
+import asyncio
 import json
 import os
 import time
-from typing import Dict, Any, List
 from dataclasses import dataclass
+from typing import Dict, Any, List
 
 # Configuration
 BASE_URL = os.getenv("VANPATTEN_API_URL", "http://localhost:10080")
 API_KEY = os.getenv("VANPATTEN_API_KEY", "")
+
 
 @dataclass
 class TestResult:
@@ -22,6 +23,7 @@ class TestResult:
     success: bool
     response: Dict[str, Any]
     error: str = ""
+
 
 class VanPattenRateLimitTester:
     def __init__(self, base_url: str = BASE_URL, api_key: str = API_KEY):
@@ -39,7 +41,7 @@ class VanPattenRateLimitTester:
         if self.session:
             await self.session.close()
 
-    async def chat_completion(self, model: str, messages: List[Dict[str, str]], 
+    async def chat_completion(self, model: str, messages: List[Dict[str, str]],
                               stream: bool = False, max_tokens: int = 50) -> TestResult:
         url = f"{self.base_url}/v1/chat/completions"
         payload = {
@@ -124,7 +126,8 @@ class VanPattenRateLimitTester:
                 hourly_req = provider_stat.get("requests_this_hour", 0)
                 hourly_limit = provider_stat.get("rate_limit", {}).get("requests_per_hour", "unlimited")
                 is_limited = provider_stat.get("is_rate_limited", False)
-                print(f"   {name}: Daily {daily_req}/{daily_limit}, Hourly {hourly_req}/{hourly_limit}, Limited: {is_limited}")
+                print(
+                    f"   {name}: Daily {daily_req}/{daily_limit}, Hourly {hourly_req}/{hourly_limit}, Limited: {is_limited}")
 
         # Test 2: Burst requests to test rate limiting
         print("\n2. Sending burst requests to test rate limiting...")
@@ -132,14 +135,14 @@ class VanPattenRateLimitTester:
         for i in range(10):
             result = await self.chat_completion(
                 model="vanpatten/auto-free",
-                messages=[{"role": "user", "content": f"Quick test {i+1}"}],
+                messages=[{"role": "user", "content": f"Quick test {i + 1}"}],
                 stream=False,
                 max_tokens=20
             )
             burst_results.append(result)
             status = "✓" if result.success else "✗"
             model_used = result.response.get("model", "unknown") if result.success else "N/A"
-            print(f"   {status} Request {i+1}: {model_used}")
+            print(f"   {status} Request {i + 1}: {model_used}")
             await asyncio.sleep(0.1)  # Small delay
 
         results.extend(burst_results)
@@ -155,23 +158,23 @@ class VanPattenRateLimitTester:
 
         # Test with a model known to be on multiple providers
         print("1. Testing failover with specific model on multiple providers...")
-        
+
         # First check which models are on multiple providers
         await self.get_admin_stats()
-        
+
         # Test with auto-free which should try multiple free models
         print("2. Testing auto-free failover...")
         for i in range(5):
             result = await self.chat_completion(
                 model="vanpatten/auto-free",
-                messages=[{"role": "user", "content": f"Test failover {i+1}"}],
+                messages=[{"role": "user", "content": f"Test failover {i + 1}"}],
                 stream=False,
                 max_tokens=30
             )
             results.append(result)
             status = "✓" if result.success else "✗"
             model_used = result.response.get("model", "unknown") if result.success else "N/A"
-            print(f"   {status} Attempt {i+1}: {model_used}")
+            print(f"   {status} Attempt {i + 1}: {model_used}")
             await asyncio.sleep(0.2)
 
         # Test 3: Streaming failover
@@ -179,13 +182,13 @@ class VanPattenRateLimitTester:
         for i in range(3):
             result = await self.chat_completion(
                 model="vanpatten/auto-free",
-                messages=[{"role": "user", "content": f"Stream test {i+1}"}],
+                messages=[{"role": "user", "content": f"Stream test {i + 1}"}],
                 stream=True,
                 max_tokens=50
             )
             results.append(result)
             status = "✓" if result.success else "✗"
-            print(f"   {status} Stream {i+1}: {len(result.response.get('content', ''))} chars")
+            print(f"   {status} Stream {i + 1}: {len(result.response.get('content', ''))} chars")
 
         return results
 
@@ -198,13 +201,13 @@ class VanPattenRateLimitTester:
         short_msg = [{"role": "user", "content": "Hi"}]
         result = await self.chat_completion("vanpatten/auto-free", short_msg, max_tokens=10)
         results.append(result)
-        
+
         # Longer message
         long_content = " ".join(["This is a test message. "] * 50)  # ~500 words
         long_msg = [{"role": "user", "content": long_content}]
         result2 = await self.chat_completion("vanpatten/auto-free", long_msg, max_tokens=100)
         results.append(result2)
-        
+
         if result.success and result2.success:
             print("   Both short and long requests succeeded")
             print("   Token estimation appears to be working correctly")
@@ -222,33 +225,34 @@ class VanPattenRateLimitTester:
         for i in range(5):
             task = self.chat_completion(
                 model="vanpatten/auto-free",
-                messages=[{"role": "user", "content": f"Concurrent test {i+1}"}],
+                messages=[{"role": "user", "content": f"Concurrent test {i + 1}"}],
                 stream=False,
                 max_tokens=20
             )
             tasks.append(task)
 
         concurrent_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for i, result in enumerate(concurrent_results):
             if isinstance(result, Exception):
                 results.append(TestResult(f"concurrent_{i}", False, {}, str(result)))
-                print(f"   ✗ Request {i+1}: Exception - {result}")
+                print(f"   ✗ Request {i + 1}: Exception - {result}")
             else:
                 results.append(result)
                 status = "✓" if result.success else "✗"
-                print(f"   {status} Request {i+1}")
+                print(f"   {status} Request {i + 1}")
 
-        print(f"\n   Concurrent test: {sum(1 for r in concurrent_results if isinstance(r, TestResult) and r.success)}/5 succeeded")
+        print(
+            f"\n   Concurrent test: {sum(1 for r in concurrent_results if isinstance(r, TestResult) and r.success)}/5 succeeded")
         return results
 
     async def run_all_rate_limit_tests(self) -> List[TestResult]:
         """Run all rate limit and failover tests."""
         all_results = []
 
-        print("="*60)
+        print("=" * 60)
         print("VanPatten AI Router - Rate Limit & Failover Tests")
-        print("="*60)
+        print("=" * 60)
 
         all_results.extend(await self.test_rate_limit_enforcement())
         all_results.extend(await self.test_failover_behavior())
@@ -262,9 +266,9 @@ async def main():
     async with VanPattenRateLimitTester() as tester:
         results = await tester.run_all_rate_limit_tests()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST SUMMARY")
-    print("="*60)
+    print("=" * 60)
     test_results = [r for r in results if isinstance(r, TestResult)]
     passed = sum(1 for r in test_results if r.success)
     failed = len(test_results) - passed

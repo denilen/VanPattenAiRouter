@@ -24,7 +24,6 @@ public static class SeedData
         var routerOptions = appOptions?.Value?.Router;
 
         if (routerOptions?.Providers != null && routerOptions.Providers.Count > 0)
-        {
             foreach (var config in routerOptions.Providers)
             {
                 var apiKey = ResolveApiKey(config.ApiKey);
@@ -56,7 +55,6 @@ public static class SeedData
 
                 providers.Add(provider);
             }
-        }
 
         // Fallback to environment variables if no config
         if (providers.Count == 0) providers.AddRange(GetDefaultProviders());

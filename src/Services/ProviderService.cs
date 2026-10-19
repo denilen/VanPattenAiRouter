@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using VanPattenAIRouter.Data;
 using VanPattenAIRouter.Models;
@@ -81,6 +82,13 @@ public interface IProviderService
     Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0);
 
     /// <summary>
+    ///     Gets all available providers that support embeddings, considering rate limits and estimated tokens.
+    /// </summary>
+    /// <param name="estimatedTokens">Estimated token count for the request.</param>
+    /// <returns>A list of available providers that have embedding models, ordered by priority.</returns>
+    Task<List<Provider>> GetAvailableEmbeddingProvidersAsync(int estimatedTokens = 0);
+
+    /// <summary>
     ///     Gets a virtual provider by name.
     /// </summary>
     /// <param name="providerName">The virtual provider name (default: "VanPatten").</param>
@@ -107,15 +115,20 @@ public interface IProviderService
     /// <param name="modelName">The exact model name to search for.</param>
     /// <param name="virtualProviderName">The virtual provider name (default: "VanPatten").</param>
     /// <returns>A list of ProviderModel entries (each with its provider) that offer this model.</returns>
-    Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(string modelName, string virtualProviderName = "VanPatten");
+    Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(string modelName,
+                                                                string virtualProviderName = "VanPatten");
 
     /// <summary>
     ///     Resolves an auto provider for the given model name (supports virtual provider routing).
     /// </summary>
-    /// <param name="modelName">The model name (e.g., "VanPatten/auto-free", "VanPatten/auto", or "VanPatten/google/gemini-2.0-flash-exp:free").</param>
+    /// <param name="modelName">
+    ///     The model name (e.g., "VanPatten/auto-free", "VanPatten/auto", or
+    ///     "VanPatten/google/gemini-2.0-flash-exp:free").
+    /// </param>
     /// <param name="estimatedTokens">Estimated token count for the request.</param>
     /// <returns>A tuple of (resolved provider, mode, specificModel). Mode can be "normal", "auto-free", "auto", or "specific".</returns>
-    Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(string modelName, int estimatedTokens = 0);
+    Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(
+        string modelName, int estimatedTokens = 0);
 
     /// <summary>
     ///     Records usage statistics for a provider.
@@ -371,7 +384,32 @@ public class ProviderService : IProviderService
                              .Select(m => new ModelInfo
                               {
                                   Id = m.ModelName,
+                                  Object = "model",
+                                  Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                                   OwnedBy = m.Provider.Name,
+                                  Permission = new List<ModelPermission>
+                                  {
+                                      new()
+                                      {
+                                          Id = $"modelperm-{Guid.NewGuid():N}[..8]",
+                                          Object = "model_permission",
+                                          Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                          AllowCompletions = true,
+                                          AllowChatCompletions = true,
+                                          AllowEmbeddings = true,
+                                          AllowFineTuning = false,
+                                          AllowSampling = true,
+                                          AllowLogprobs = true,
+                                          AllowSearchIndices = false,
+                                          AllowView = true,
+                                          Model = m.ModelName,
+                                          Organization = null,
+                                          Group = null,
+                                          IsBlocking = false
+                                      }
+                                  },
+                                  Root = null,
+                                  Parent = null,
                                   IsFree = m.IsFree,
                                   Provider = m.Provider.Name
                               })
@@ -416,6 +454,28 @@ public class ProviderService : IProviderService
 
         var response = new ModelsGroupedResponse();
 
+        var defaultPermissions = new List<ModelPermission>
+        {
+            new()
+            {
+                Id = $"modelperm-{Guid.NewGuid():N}[..8]",
+                Object = "model_permission",
+                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                AllowCompletions = true,
+                AllowChatCompletions = true,
+                AllowEmbeddings = true,
+                AllowFineTuning = false,
+                AllowSampling = true,
+                AllowLogprobs = true,
+                AllowSearchIndices = false,
+                AllowView = true,
+                Model = "",
+                Organization = null,
+                Group = null,
+                IsBlocking = false
+            }
+        };
+
         // Group 1: Free models
         var freeModels = distinctModels
                         .Where(m => m.IsFree)
@@ -426,6 +486,26 @@ public class ProviderService : IProviderService
                              Object = "model",
                              Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                              OwnedBy = string.Join(", ", m.Providers.Select(p => p.Name).Distinct()),
+                             Permission = defaultPermissions.Select(p => new ModelPermission
+                             {
+                                 Id = p.Id,
+                                 Object = p.Object,
+                                 Created = p.Created,
+                                 AllowCompletions = p.AllowCompletions,
+                                 AllowChatCompletions = p.AllowChatCompletions,
+                                 AllowEmbeddings = p.AllowEmbeddings,
+                                 AllowFineTuning = p.AllowFineTuning,
+                                 AllowSampling = p.AllowSampling,
+                                 AllowLogprobs = p.AllowLogprobs,
+                                 AllowSearchIndices = p.AllowSearchIndices,
+                                 AllowView = p.AllowView,
+                                 Model = m.ModelName,
+                                 Organization = p.Organization,
+                                 Group = p.Group,
+                                 IsBlocking = p.IsBlocking
+                             }).ToList(),
+                             Root = null,
+                             Parent = null,
                              IsFree = true,
                              Provider = string.Join(", ", m.Providers.Select(p => p.Name).Distinct())
                          })
@@ -459,6 +539,26 @@ public class ProviderService : IProviderService
                                      Object = "model",
                                      Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                                      OwnedBy = providerName,
+                                     Permission = defaultPermissions.Select(p => new ModelPermission
+                                     {
+                                         Id = p.Id,
+                                         Object = p.Object,
+                                         Created = p.Created,
+                                         AllowCompletions = p.AllowCompletions,
+                                         AllowChatCompletions = p.AllowChatCompletions,
+                                         AllowEmbeddings = p.AllowEmbeddings,
+                                         AllowFineTuning = p.AllowFineTuning,
+                                         AllowSampling = p.AllowSampling,
+                                         AllowLogprobs = p.AllowLogprobs,
+                                         AllowSearchIndices = p.AllowSearchIndices,
+                                         AllowView = p.AllowView,
+                                         Model = g.Key,
+                                         Organization = p.Organization,
+                                         Group = p.Group,
+                                         IsBlocking = p.IsBlocking
+                                     }).ToList(),
+                                     Root = null,
+                                     Parent = null,
                                      IsFree = g.Any(x => x.IsFree),
                                      Provider = providerName
                                  })
@@ -503,7 +603,7 @@ public class ProviderService : IProviderService
         return providerModel?.Provider;
     }
 
-/// <inheritdoc />
+    /// <inheritdoc />
     public async Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0)
     {
         _logger.LogDebug("Finding available provider for model: {ModelName} (estimated tokens: {Tokens})", modelName,
@@ -514,12 +614,12 @@ public class ProviderService : IProviderService
 
         // Match exact or by suffix (e.g., "openai/gpt-4o-mini" matches "gpt-4o-mini")
         var providers = await _context.ProviderModels
-                                       .Include(m => m.Provider)
-                                       .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
-                                                  && m.IsEnabled && m.Provider.IsActive)
-                                       .OrderByDescending(m => m.Provider.Priority)
-                                       .Select(m => m.Provider)
-                                       .ToListAsync();
+                                      .Include(m => m.Provider)
+                                      .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
+                                                 && m.IsEnabled && m.Provider.IsActive)
+                                      .OrderByDescending(m => m.Provider.Priority)
+                                      .Select(m => m.Provider)
+                                      .ToListAsync();
 
         foreach (var provider in providers)
         {
@@ -568,7 +668,7 @@ public class ProviderService : IProviderService
         return null;
     }
 
-/// <inheritdoc />
+    /// <inheritdoc />
     public async Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0)
     {
         _logger.LogDebug("Getting all available providers for model: {ModelName} (estimated tokens: {Tokens})",
@@ -579,12 +679,12 @@ public class ProviderService : IProviderService
 
         // Match exact or by suffix (e.g., "openai/gpt-4o-mini" matches "gpt-4o-mini")
         var providers = await _context.ProviderModels
-                                       .Include(m => m.Provider)
-                                       .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
-                                                  && m.IsEnabled && m.Provider.IsActive)
-                                       .OrderByDescending(m => m.Provider.Priority)
-                                       .Select(m => m.Provider)
-                                       .ToListAsync();
+                                      .Include(m => m.Provider)
+                                      .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
+                                                 && m.IsEnabled && m.Provider.IsActive)
+                                      .OrderByDescending(m => m.Provider.Priority)
+                                      .Select(m => m.Provider)
+                                      .ToListAsync();
 
         var availableProviders = new List<Provider>();
 
@@ -637,6 +737,74 @@ public class ProviderService : IProviderService
     }
 
     /// <inheritdoc />
+    public async Task<List<Provider>> GetAvailableEmbeddingProvidersAsync(int estimatedTokens = 0)
+    {
+        _logger.LogDebug("Getting available embedding providers (estimated tokens: {Tokens})", estimatedTokens);
+
+        // Reset daily/hourly usage if needed
+        await ResetDailyUsageIfNeededAsync();
+
+        // Find providers that have embedding models (model name contains "embedding")
+        // Use EF.Functions.Like for SQLite compatibility
+        var providers = await _context.ProviderModels
+                                      .Include(m => m.Provider)
+                                      .Where(m => EF.Functions.Like(m.ModelName, "%embedding%")
+                                                 && m.IsEnabled && m.Provider.IsActive)
+                                      .OrderByDescending(m => m.Provider.Priority)
+                                      .Select(m => m.Provider)
+                                      .Distinct()
+                                      .ToListAsync();
+
+        var availableProviders = new List<Provider>();
+
+        foreach (var provider in providers)
+            // Check rate limits using IsRateLimited property
+            if (!provider.IsRateLimited)
+            {
+                // Check if estimated tokens would exceed limit
+                var rateLimit = provider.RateLimit;
+                if (estimatedTokens > 0)
+                {
+                    if (rateLimit.RequestsPerDay > 0)
+                    {
+                        // Daily limit - check both requests and tokens
+                        if (provider.RequestsToday + 1 > rateLimit.RequestsPerDay ||
+                            provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay)
+                        {
+                            _logger.LogWarning(
+                                "Provider {ProviderName} would exceed daily limit with estimated {Tokens} tokens",
+                                provider.Name, estimatedTokens);
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // Hourly limit - check both requests and tokens
+                        if (provider.RequestsThisHour + 1 > rateLimit.RequestsPerHour ||
+                            provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour)
+                        {
+                            _logger.LogWarning(
+                                "Provider {ProviderName} would exceed hourly limit with estimated {Tokens} tokens",
+                                provider.Name, estimatedTokens);
+                            continue;
+                        }
+                    }
+                }
+
+                availableProviders.Add(provider);
+                _logger.LogDebug("Embedding provider {ProviderName} available (priority: {Priority})",
+                                 provider.Name, provider.Priority);
+            }
+            else
+            {
+                _logger.LogDebug("Skipping rate-limited embedding provider: {ProviderName}", provider.Name);
+            }
+
+        _logger.LogInformation("Found {Count} available embedding providers", availableProviders.Count);
+        return availableProviders;
+    }
+
+    /// <inheritdoc />
     public async Task RecordUsageAsync(int providerId, int tokensUsed)
     {
         var now = DateTime.UtcNow;
@@ -648,8 +816,7 @@ public class ProviderService : IProviderService
         if (isRelational)
         {
             // Use ExecuteUpdateAsync for atomic database-level increment to avoid race conditions
-            await _context.Database.ExecuteSqlRawAsync(
-                @"
+            await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE Providers 
                 SET 
                     RequestsToday = CASE WHEN LastResetDate != @today THEN 1 ELSE RequestsToday + 1 END,
@@ -658,18 +825,13 @@ public class ProviderService : IProviderService
                     RequestsThisHour = CASE WHEN LastHourReset != @thisHour THEN 1 ELSE RequestsThisHour + 1 END,
                     TokensThisHour = CASE WHEN LastHourReset != @thisHour THEN @tokens ELSE TokensThisHour + @tokens END,
                     LastHourReset = CASE WHEN LastHourReset != @thisHour THEN @thisHour ELSE LastHourReset END
-                WHERE Id = @providerId",
-                new[]
-                {
-                    new Microsoft.Data.Sqlite.SqliteParameter("@providerId", providerId),
-                    new Microsoft.Data.Sqlite.SqliteParameter("@tokens", tokensUsed),
-                    new Microsoft.Data.Sqlite.SqliteParameter("@today", today),
-                    new Microsoft.Data.Sqlite.SqliteParameter("@thisHour", thisHour)
-                });
+                WHERE Id = @providerId", new SqliteParameter("@providerId", providerId),
+                                                       new SqliteParameter("@tokens", tokensUsed),
+                                                       new SqliteParameter("@today", today),
+                                                       new SqliteParameter("@thisHour", thisHour));
 
-            _logger.LogDebug(
-                "Recorded usage atomically for provider {ProviderId}: +1 request, +{Tokens} tokens",
-                providerId, tokensUsed);
+            _logger.LogDebug("Recorded usage atomically for provider {ProviderId}: +1 request, +{Tokens} tokens",
+                             providerId, tokensUsed);
         }
         else
         {
@@ -710,7 +872,7 @@ public class ProviderService : IProviderService
         }
     }
 
-/// <inheritdoc />
+    /// <inheritdoc />
     public async Task ResetDailyUsageIfNeededAsync()
     {
         var now = DateTime.UtcNow;
@@ -723,22 +885,20 @@ public class ProviderService : IProviderService
         if (isRelational)
         {
             // Use atomic SQL updates to avoid race conditions with concurrent RecordUsageAsync calls
-            var dailyResetCount = await _context.Database.ExecuteSqlRawAsync(
-                @"
+            var dailyResetCount = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE Providers 
                 SET RequestsToday = 0, TokensToday = 0, LastResetDate = @today
                 WHERE LastResetDate < @today",
-                new Microsoft.Data.Sqlite.SqliteParameter("@today", today));
+                                                                             new SqliteParameter("@today", today));
 
-            var hourlyResetCount = await _context.Database.ExecuteSqlRawAsync(
-                @"
+            var hourlyResetCount = await _context.Database.ExecuteSqlRawAsync(@"
                 UPDATE Providers 
                 SET RequestsThisHour = 0, TokensThisHour = 0, LastHourReset = @thisHour
                 WHERE LastHourReset < @thisHour",
-                new Microsoft.Data.Sqlite.SqliteParameter("@thisHour", thisHour));
+                                                                              new SqliteParameter(
+                                                                                  "@thisHour", thisHour));
 
-            if (dailyResetCount > 0)
-                _logger.LogInformation("Reset daily usage for {Count} providers", dailyResetCount);
+            if (dailyResetCount > 0) _logger.LogInformation("Reset daily usage for {Count} providers", dailyResetCount);
 
             if (hourlyResetCount > 0)
                 _logger.LogInformation("Reset hourly usage for {Count} providers", hourlyResetCount);
@@ -747,8 +907,8 @@ public class ProviderService : IProviderService
         {
             // Fallback for in-memory database (tests) - use entity-based approach
             var providersToReset = await _context.Providers
-                                                  .Where(p => p.LastResetDate < today || p.LastHourReset < thisHour)
-                                                  .ToListAsync();
+                                                 .Where(p => p.LastResetDate < today || p.LastHourReset < thisHour)
+                                                 .ToListAsync();
 
             if (providersToReset.Count > 0)
             {
@@ -774,9 +934,10 @@ public class ProviderService : IProviderService
                 }
 
                 await _context.SaveChangesAsync();
-                
+
                 if (providersToReset.Count > 0)
-                    _logger.LogInformation("Reset usage for {Count} providers (in-memory fallback)", providersToReset.Count);
+                    _logger.LogInformation("Reset usage for {Count} providers (in-memory fallback)",
+                                           providersToReset.Count);
             }
         }
     }
@@ -833,20 +994,21 @@ public class ProviderService : IProviderService
 
         // Get all models from all active non-virtual providers
         var allModels = await _context.ProviderModels
-                                       .Include(m => m.Provider)
-                                       .Where(m => m.IsEnabled
-                                                  && m.Provider.IsActive
-                                                  && !m.Provider.IsVirtual
-                                                  && m.Provider.Type != "virtual")
-                                       .OrderByDescending(m => m.Provider.Priority)
-                                       .ToListAsync();
+                                      .Include(m => m.Provider)
+                                      .Where(m => m.IsEnabled
+                                                 && m.Provider.IsActive
+                                                 && !m.Provider.IsVirtual
+                                                 && m.Provider.Type != "virtual")
+                                      .OrderByDescending(m => m.Provider.Priority)
+                                      .ToListAsync();
 
         _logger.LogInformation("Found {Count} models for auto mode", allModels.Count);
         return allModels;
     }
 
-/// <inheritdoc />
-    public async Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(string modelName, string virtualProviderName = "VanPatten")
+    /// <inheritdoc />
+    public async Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(
+        string modelName, string virtualProviderName = "VanPatten")
     {
         _logger.LogDebug("Getting providers for specific model: {ModelName}", modelName);
 
@@ -856,21 +1018,22 @@ public class ProviderService : IProviderService
         // Get all providers that have this specific model (enabled, any free/paid)
         // Use exact match with proper path boundary check to avoid false positives
         var models = await _context.ProviderModels
-                                     .Include(m => m.Provider)
-                                     .Where(m => m.IsEnabled
-                                                && m.ModelName == modelName
-                                                && m.Provider.IsActive
-                                                && !m.Provider.IsVirtual
-                                                && m.Provider.Type != "virtual")
-                                     .OrderByDescending(m => m.Provider.Priority)
-                                     .ToListAsync();
+                                   .Include(m => m.Provider)
+                                   .Where(m => m.IsEnabled
+                                              && m.ModelName == modelName
+                                              && m.Provider.IsActive
+                                              && !m.Provider.IsVirtual
+                                              && m.Provider.Type != "virtual")
+                                   .OrderByDescending(m => m.Provider.Priority)
+                                   .ToListAsync();
 
         _logger.LogInformation("Found {Count} providers for model {ModelName}", models.Count, modelName);
         return models;
     }
 
     /// <inheritdoc />
-    public async Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(string modelName, int estimatedTokens = 0)
+    public async Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(
+        string modelName, int estimatedTokens = 0)
     {
         _logger.LogDebug("Resolving auto provider for model: {ModelName}", modelName);
 
@@ -903,7 +1066,7 @@ public class ProviderService : IProviderService
             // The requestedPath is the model name - check if any provider has it and is not rate limited
             var specificModel = requestedPath;
             _logger.LogInformation("Specific model mode requested: {Model}", specificModel);
-            
+
             // Check if any provider has this model and is available
             var availableProviders = await GetAllAvailableProvidersForModelAsync(specificModel, estimatedTokens);
             if (availableProviders.Count == 0)
@@ -911,7 +1074,7 @@ public class ProviderService : IProviderService
                 _logger.LogWarning("No available provider for specific model: {Model}", specificModel);
                 return (null, "specific", specificModel);
             }
-            
+
             return (virtualProvider, "specific", specificModel);
         }
 

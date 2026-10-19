@@ -1,9 +1,5 @@
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
-using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,14 +18,14 @@ namespace VanPattenAIRouter.Tests.Services;
 public class StreamingFailoverAndVirtualProviderTests
 {
     private readonly AiRouterDbContext _context;
-    private readonly RoutingService _routingService;
     private readonly Mock<IHttpClientFactory> _httpClientFactoryMock;
+    private readonly RoutingService _routingService;
 
     public StreamingFailoverAndVirtualProviderTests()
     {
         var options = new DbContextOptionsBuilder<AiRouterDbContext>()
-            .UseInMemoryDatabase(databaseName: $"StreamingTest_{System.Guid.NewGuid()}")
-            .Options;
+                     .UseInMemoryDatabase($"StreamingTest_{Guid.NewGuid()}")
+                     .Options;
         _context = new AiRouterDbContext(options);
 
         var providerLogger = new Mock<ILogger<ProviderService>>().Object;
@@ -41,23 +37,24 @@ public class StreamingFailoverAndVirtualProviderTests
         var retryService = new RetryPolicyService(retryConfig, retryLogger);
 
         _httpClientFactoryMock = new Mock<IHttpClientFactory>();
-        _routingService = new RoutingService(providerService, _httpClientFactoryMock.Object, retryService, routingLogger);
+        _routingService = new RoutingService(providerService, _httpClientFactoryMock.Object, retryService,
+                                             routingLogger, _context);
     }
 
     private HttpClient CreateMockHttpClient(HttpStatusCode statusCode, string responseContent, string expectedModel)
     {
         var handlerMock = new Mock<HttpMessageHandler>();
         handlerMock.Protected()
-            .Setup<Task<HttpResponseMessage>>("SendAsync",
-                ItExpr.Is<HttpRequestMessage>(req =>
-                    req.Method == HttpMethod.Post &&
-                    req.RequestUri!.PathAndQuery.Contains("chat/completions")),
-                ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(new HttpResponseMessage
-            {
-                StatusCode = statusCode,
-                Content = new StringContent(responseContent, Encoding.UTF8, "application/json")
-            });
+                   .Setup<Task<HttpResponseMessage>>("SendAsync",
+                                                     ItExpr.Is<HttpRequestMessage>(req =>
+                                                         req.Method == HttpMethod.Post &&
+                                                         req.RequestUri!.PathAndQuery.Contains("chat/completions")),
+                                                     ItExpr.IsAny<CancellationToken>())
+                   .ReturnsAsync(new HttpResponseMessage
+                    {
+                        StatusCode = statusCode,
+                        Content = new StringContent(responseContent, Encoding.UTF8, "application/json")
+                    });
 
         var client = new HttpClient(handlerMock.Object)
         {
@@ -73,12 +70,15 @@ public class StreamingFailoverAndVirtualProviderTests
 
     private RetryPolicyService CreateRetryService()
     {
-        return new RetryPolicyService(Options.Create(new RetryConfig()), new Mock<ILogger<RetryPolicyService>>().Object);
+        return new RetryPolicyService(Options.Create(new RetryConfig()),
+                                      new Mock<ILogger<RetryPolicyService>>().Object);
     }
 
-    private RoutingService CreateRoutingService(ProviderService providerService, IHttpClientFactory httpClientFactory, RetryPolicyService retryService)
+    private RoutingService CreateRoutingService(ProviderService providerService, IHttpClientFactory httpClientFactory,
+                                                RetryPolicyService retryService)
     {
-        return new RoutingService(providerService, httpClientFactory, retryService, new Mock<ILogger<RoutingService>>().Object);
+        return new RoutingService(providerService, httpClientFactory, retryService,
+                                  new Mock<ILogger<RoutingService>>().Object, _context);
     }
 
     [Fact]
@@ -119,29 +119,31 @@ public class StreamingFailoverAndVirtualProviderTests
         await _context.SaveChangesAsync();
 
         // Provider 1 returns 500 (failover)
-        var client1 = CreateMockHttpClient(HttpStatusCode.InternalServerError, "{\"error\":\"server error\"}", "test/model");
+        var client1 = CreateMockHttpClient(HttpStatusCode.InternalServerError, "{\"error\":\"server error\"}",
+                                           "test/model");
         _httpClientFactoryMock.Setup(x => x.CreateClient("streaming")).Returns(client1);
         _httpClientFactoryMock.Setup(x => x.CreateClient("default")).Returns(client1);
 
         // But provider 2 succeeds
-        var successResponse = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n";
+        var successResponse
+            = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n";
         successResponse += "data: [DONE]\n\n";
         var client2 = CreateMockHttpClient(HttpStatusCode.OK, successResponse, "test/model");
-        
+
         // Setup factory to return different clients for different calls
         var callCount = 0;
         _httpClientFactoryMock.Setup(x => x.CreateClient("streaming"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                              .Returns(() =>
+                               {
+                                   callCount++;
+                                   return callCount == 1 ? client1 : client2;
+                               });
         _httpClientFactoryMock.Setup(x => x.CreateClient("default"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                              .Returns(() =>
+                               {
+                                   callCount++;
+                                   return callCount == 1 ? client1 : client2;
+                               });
 
         var providerService = CreateProviderService();
         var retryService = CreateRetryService();
@@ -216,24 +218,25 @@ public class StreamingFailoverAndVirtualProviderTests
         var client1 = CreateMockHttpClient((HttpStatusCode)429, "{\"error\":\"rate limited\"}", "test/model");
 
         // Provider 2 succeeds
-        var successResponse = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hello from Provider 2\"}}]}\n\n";
+        var successResponse
+            = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Hello from Provider 2\"}}]}\n\n";
         successResponse += "data: [DONE]\n\n";
         var client2 = CreateMockHttpClient(HttpStatusCode.OK, successResponse, "test/model");
 
         var callCount = 0;
         var httpClientFactoryMock = new Mock<IHttpClientFactory>();
         httpClientFactoryMock.Setup(x => x.CreateClient("streaming"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                             .Returns(() =>
+                              {
+                                  callCount++;
+                                  return callCount == 1 ? client1 : client2;
+                              });
         httpClientFactoryMock.Setup(x => x.CreateClient("default"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                             .Returns(() =>
+                              {
+                                  callCount++;
+                                  return callCount == 1 ? client1 : client2;
+                              });
 
         var providerService = CreateProviderService();
         var retryService = CreateRetryService();
@@ -304,27 +307,29 @@ public class StreamingFailoverAndVirtualProviderTests
         await _context.SaveChangesAsync();
 
         // Provider 1 returns 503 (retryable)
-        var client1 = CreateMockHttpClient(HttpStatusCode.ServiceUnavailable, "{\"error\":\"service unavailable\"}", "free/model");
+        var client1 = CreateMockHttpClient(HttpStatusCode.ServiceUnavailable, "{\"error\":\"service unavailable\"}",
+                                           "free/model");
 
         // Provider 2 succeeds
-        var successResponse = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Success\"}}]}\n\n";
+        var successResponse
+            = "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"Success\"}}]}\n\n";
         successResponse += "data: [DONE]\n\n";
         var client2 = CreateMockHttpClient(HttpStatusCode.OK, successResponse, "free/model");
 
         var callCount = 0;
         var httpClientFactoryMock = new Mock<IHttpClientFactory>();
         httpClientFactoryMock.Setup(x => x.CreateClient("streaming"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                             .Returns(() =>
+                              {
+                                  callCount++;
+                                  return callCount == 1 ? client1 : client2;
+                              });
         httpClientFactoryMock.Setup(x => x.CreateClient("default"))
-            .Returns(() =>
-            {
-                callCount++;
-                return callCount == 1 ? client1 : client2;
-            });
+                             .Returns(() =>
+                              {
+                                  callCount++;
+                                  return callCount == 1 ? client1 : client2;
+                              });
 
         var providerService = CreateProviderService();
         var retryService = CreateRetryService();

@@ -1,4 +1,3 @@
-using System.IO;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -157,8 +156,10 @@ public class KiloCodeIntegrationTests : IClassFixture<TestWebApplicationFactory>
 
         providers.Should().NotBeNull();
         // Check for any KiloCode provider (test factory seeds "KiloCode", appsettings has "KiloCode - email")
-        providers!.Should().Contain(p => p.Name.Contains("KiloCode", StringComparison.OrdinalIgnoreCase) && p.IsActive == true);
-        var kilocode = providers!.First(p => p.Name.Contains("KiloCode", StringComparison.OrdinalIgnoreCase) && p.IsActive);
+        providers!.Should()
+                  .Contain(p => p.Name.Contains("KiloCode", StringComparison.OrdinalIgnoreCase) && p.IsActive == true);
+        var kilocode
+            = providers!.First(p => p.Name.Contains("KiloCode", StringComparison.OrdinalIgnoreCase) && p.IsActive);
         kilocode.RateLimit.Should().NotBeNull();
         // Rate limit values may vary based on config source (test factory vs appsettings)
         kilocode.ApiKey.Should().NotBeNull();
@@ -288,7 +289,7 @@ public class KiloCodeIntegrationTests : IClassFixture<TestWebApplicationFactory>
         var routingService = new RoutingService(mockProviderService.Object,
                                                 mockHttpClientFactory.Object,
                                                 retryPolicyService,
-                                                logger);
+                                                logger, _context);
 
         // Create request with tool result
         var request = new ChatCompletionRequest
@@ -505,16 +506,19 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>
     private static IOptions<AppOptions> BuildTestAppOptions()
     {
         var configBuilder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: true)
-            .AddJsonFile("appsettings.Development.json", optional: true)
-            .AddEnvironmentVariables();
+                           .SetBasePath(Directory.GetCurrentDirectory())
+                           .AddJsonFile("appsettings.json", true)
+                           .AddJsonFile("appsettings.Development.json", true)
+                           .AddEnvironmentVariables();
 
         var configuration = configBuilder.Build();
 
         // Get the first KiloCode provider's API key from config
         var kilocodeProvider = configuration.GetSection("Router:Providers").GetChildren()
-            .FirstOrDefault(p => p["Name"]?.Contains("KiloCode", StringComparison.OrdinalIgnoreCase) == true);
+                                            .FirstOrDefault(p => p["Name"]
+                                                                  ?.Contains(
+                                                                        "KiloCode", StringComparison.OrdinalIgnoreCase)
+                                                                == true);
 
         var apiKey = kilocodeProvider?["ApiKey"] ?? "test-key";
 

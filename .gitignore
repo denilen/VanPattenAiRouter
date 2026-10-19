@@ -613,5 +613,8 @@ appsettings.Production.json
 # Tasks notes
 Tasks
 plans
-data
+plan/
+tests/VanPattenAIRouter.Tests/LLM-result/tests
+data/
+
 

@@ -4,16 +4,17 @@ LLM-Generated Test: VanPatten AI Router - Auto Mode Test
 Tests the vanpatten/auto virtual model which routes to all models (free + paid).
 """
 
-import asyncio
 import aiohttp
+import asyncio
 import json
 import os
-from typing import Dict, Any, List
 from dataclasses import dataclass
+from typing import Dict, Any, List
 
 # Configuration
 BASE_URL = os.getenv("VANPATTEN_API_URL", "http://localhost:10080")
 API_KEY = os.getenv("VANPATTEN_API_KEY", "")
+
 
 @dataclass
 class TestResult:
@@ -21,6 +22,7 @@ class TestResult:
     success: bool
     response: Dict[str, Any]
     error: str = ""
+
 
 class VanPattenAutoTester:
     def __init__(self, base_url: str = BASE_URL, api_key: str = API_KEY):
@@ -146,7 +148,7 @@ class VanPattenAutoTester:
         # Test 4: Compare with auto-free
         print("\n4. Comparing auto vs auto-free for same prompt...")
         prompt = "What is Python?"
-        
+
         auto_result = await self.chat_completion(
             model="vanpatten/auto",
             messages=[{"role": "user", "content": prompt}],
@@ -157,10 +159,10 @@ class VanPattenAutoTester:
             messages=[{"role": "user", "content": prompt}],
             stream=False
         )
-        
+
         results.append(auto_result)
         results.append(free_result)
-        
+
         if auto_result.success and free_result.success:
             auto_model = auto_result.response.get('model', 'unknown')
             free_model = free_result.response.get('model', 'unknown')
@@ -175,9 +177,9 @@ async def main():
     async with VanPattenAutoTester() as tester:
         results = await tester.run_auto_tests()
 
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("TEST SUMMARY")
-    print("="*50)
+    print("=" * 50)
     passed = sum(1 for r in results if r.success)
     failed = len(results) - passed
     print(f"Total: {len(results)} | Passed: {passed} | Failed: {failed}")

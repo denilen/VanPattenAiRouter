@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace VanPattenAIRouter.Models;
 
 /// <summary>
@@ -37,44 +35,4 @@ public class RouterOptions
     ///     Provider configurations for seeding.
     /// </summary>
     public List<ProviderConfig> Providers { get; set; } = new();
-}
-
-
-
-/// <summary>
-///     Database configuration options.
-/// </summary>
-public class DatabaseOptions
-{
-    /// <summary>
-    ///     Path to the SQLite database file.
-    /// </summary>
-    public string Path { get; set; } = "data/vanpatten-airrouter.db";
-
-    /// <summary>
-    ///     Whether to delete and recreate the database on startup.
-    ///     Useful for development or when provider configuration has changed.
-    /// </summary>
-    public bool RecreateOnStartup { get; set; } = false;
-}
-
-/// <summary>
-///     Application configuration options.
-/// </summary>
-public class AppOptions
-{
-    /// <summary>
-    ///     Whether to use in-memory database (for testing).
-    /// </summary>
-    public bool UseInMemoryDatabase { get; set; }
-
-    /// <summary>
-    ///     Database configuration.
-    /// </summary>
-    public DatabaseOptions Database { get; set; } = new();
-
-    /// <summary>
-    ///     Router configuration.
-    /// </summary>
-    public RouterOptions Router { get; set; } = new();
 }

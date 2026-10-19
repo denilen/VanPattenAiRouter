@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using VanPattenAIRouter.Models;
 
@@ -27,6 +26,36 @@ public class AiRouterDbContext : DbContext
     ///     Gets or sets the provider models table.
     /// </summary>
     public DbSet<ProviderModel> ProviderModels { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the files table.
+    /// </summary>
+    public DbSet<FileEntity> Files { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the assistants table.
+    /// </summary>
+    public DbSet<AssistantEntity> Assistants { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the threads table.
+    /// </summary>
+    public DbSet<ThreadEntity> Threads { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the thread messages table.
+    /// </summary>
+    public DbSet<ThreadMessageEntity> ThreadMessages { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the runs table.
+    /// </summary>
+    public DbSet<RunEntity> Runs { get; set; } = null!;
+
+    /// <summary>
+    ///     Gets or sets the run steps table.
+    /// </summary>
+    public DbSet<RunStepEntity> RunSteps { get; set; } = null!;
 
     /// <summary>
     ///     Configures the entity model for the database.
@@ -68,191 +97,95 @@ public class AiRouterDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(e => new { e.ProviderId, e.ModelName }).IsUnique();
         });
-    }
-}
 
-/// <summary>
-///     Represents an AI provider in the system.
-/// </summary>
-public class Provider
-{
-    /// <summary>
-    ///     Unique identifier for the provider.
-    /// </summary>
-    public int Id { get; set; }
-
-    /// <summary>
-    ///     Display name of the provider.
-    /// </summary>
-    public string Name { get; set; } = "";
-
-    /// <summary>
-    ///     Base URL of the provider's API endpoint.
-    /// </summary>
-    public string BaseUrl { get; set; } = "";
-
-    /// <summary>
-    ///     API key for authenticating with the provider.
-    /// </summary>
-    public string ApiKey { get; set; } = "";
-
-    /// <summary>
-    ///     Type of the provider (e.g., "openai", "anthropic", "virtual").
-    /// </summary>
-    public string Type { get; set; } = "openai";
-
-    /// <summary>
-    ///     Additional HTTP headers as JSON string.
-    /// </summary>
-    public string? Headers { get; set; }
-
-    /// <summary>
-    ///     Whether the provider is currently active.
-    /// </summary>
-    public bool IsActive { get; set; } = true;
-
-    /// <summary>
-    ///     Priority for routing decisions. Higher priority providers are tried first.
-    /// </summary>
-    public int Priority { get; set; }
-
-    /// <summary>
-    ///     Timestamp when the provider was created.
-    /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
-    ///     Timestamp when the provider was last updated.
-    /// </summary>
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
-    ///     Whether this is a virtual provider (router) without a direct API endpoint.
-    /// </summary>
-    public bool IsVirtual { get; set; }
-
-    /// <summary>
-    ///     Rate limit configuration serialized as JSON.
-    /// </summary>
-    public string RateLimitJson { get; set; } = "{}";
-
-    /// <summary>
-    ///     Number of requests made today.
-    /// </summary>
-    public int RequestsToday { get; set; }
-
-    /// <summary>
-    ///     Number of tokens consumed today.
-    /// </summary>
-    public int TokensToday { get; set; }
-
-    /// <summary>
-    ///     The date when the daily counters were last reset.
-    /// </summary>
-    public DateTime LastResetDate { get; set; } = DateTime.UtcNow.Date;
-
-    /// <summary>
-    ///     Number of requests made in the current hour.
-    /// </summary>
-    public int RequestsThisHour { get; set; }
-
-    /// <summary>
-    ///     Number of tokens consumed in the current hour.
-    /// </summary>
-    public int TokensThisHour { get; set; }
-
-    /// <summary>
-    ///     The hour when the hourly counters were last reset (UTC).
-    ///     Initialized to minimum value so first check will trigger reset.
-    /// </summary>
-    public DateTime LastHourReset { get; set; } = DateTime.MinValue;
-
-    /// <summary>
-    ///     Navigation property for models offered by this provider.
-    /// </summary>
-    public List<ProviderModel> Models { get; set; } = new();
-
-    /// <summary>
-    ///     Gets or sets the rate limit configuration.
-    /// </summary>
-    public RateLimitConfig RateLimit
-    {
-        get => JsonSerializer.Deserialize<RateLimitConfig>(RateLimitJson) ?? new RateLimitConfig();
-        set => RateLimitJson = JsonSerializer.Serialize(value);
-    }
-
-    /// <summary>
-    ///     Gets a value indicating whether the provider has exceeded its rate limits.
-    ///     This property does NOT perform lazy reset - call ResetIfNeeded() on the service instead.
-    /// </summary>
-    public bool IsRateLimited
-    {
-        get
+        modelBuilder.Entity<FileEntity>(entity =>
         {
-            var rateLimit = RateLimit;
-            
-            // Use daily limits if configured (RequestsPerDay > 0), otherwise use hourly limits
-            if (rateLimit.RequestsPerDay > 0)
-                return RequestsToday >= rateLimit.RequestsPerDay || TokensToday >= rateLimit.TokensPerDay;
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Filename).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.Purpose).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.StatusDetails).HasMaxLength(1000);
+            entity.Property(e => e.StoragePath).HasMaxLength(1000);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.Purpose);
+        });
 
-            // Use hourly limits
-            return RequestsThisHour >= rateLimit.RequestsPerHour || TokensThisHour >= rateLimit.TokensPerHour;
-        }
+        modelBuilder.Entity<AssistantEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Name).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Model).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Instructions).HasMaxLength(10000);
+            entity.Property(e => e.MetadataJson).HasMaxLength(2000);
+            entity.Property(e => e.ResponseFormatJson).HasMaxLength(1000);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<ThreadEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.MetadataJson).HasMaxLength(2000);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<ThreadMessageEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ThreadId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Role).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.ContentJson).HasMaxLength(50000);
+            entity.Property(e => e.FileIdsJson).HasMaxLength(2000);
+            entity.Property(e => e.MetadataJson).HasMaxLength(2000);
+            entity.Property(e => e.AssistantId).HasMaxLength(50);
+            entity.Property(e => e.RunId).HasMaxLength(50);
+            entity.HasIndex(e => e.ThreadId);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<RunEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ThreadId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.AssistantId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Model).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Instructions).HasMaxLength(10000);
+            entity.Property(e => e.ToolsJson).HasMaxLength(2000);
+            entity.Property(e => e.FileIdsJson).HasMaxLength(2000);
+            entity.Property(e => e.MetadataJson).HasMaxLength(2000);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.RequiredActionJson).HasMaxLength(2000);
+            entity.Property(e => e.LastErrorJson).HasMaxLength(1000);
+            entity.Property(e => e.IncompleteDetailsJson).HasMaxLength(1000);
+            entity.Property(e => e.ResponseFormatJson).HasMaxLength(1000);
+            entity.Property(e => e.ToolChoiceJson).HasMaxLength(1000);
+            entity.Property(e => e.TruncationStrategyJson).HasMaxLength(1000);
+            entity.HasIndex(e => e.ThreadId);
+            entity.HasIndex(e => e.AssistantId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<RunStepEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.RunId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.ThreadId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.AssistantId).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Type).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.StepDetailsJson).HasMaxLength(2000);
+            entity.Property(e => e.LastErrorJson).HasMaxLength(1000);
+            entity.Property(e => e.UsageJson).HasMaxLength(1000);
+            entity.HasIndex(e => e.RunId);
+            entity.HasIndex(e => e.ThreadId);
+            entity.HasIndex(e => e.CreatedAt);
+        });
     }
-
-    /// <summary>
-    ///     Checks if a new day has started since last reset.
-    /// </summary>
-    public bool IsDailyResetNeeded => LastResetDate != DateTime.UtcNow.Date;
-
-    /// <summary>
-    ///     Checks if a new hour has started since last reset.
-    /// </summary>
-    public bool IsHourlyResetNeeded => LastHourReset != new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, DateTime.UtcNow.Hour, 0, 0, DateTimeKind.Utc);
-}
-
-/// <summary>
-///     Represents a model offered by a provider.
-/// </summary>
-public class ProviderModel
-{
-    /// <summary>
-    ///     Unique identifier for the provider model.
-    /// </summary>
-    public int Id { get; set; }
-
-    /// <summary>
-    ///     Foreign key to the provider.
-    /// </summary>
-    public int ProviderId { get; set; }
-
-    /// <summary>
-    ///     The model name as exposed by the router.
-    /// </summary>
-    public string ModelName { get; set; } = "";
-
-    /// <summary>
-    ///     The model name as known by the provider (may differ from ModelName).
-    /// </summary>
-    public string? ProviderModelName { get; set; }
-
-    /// <summary>
-    ///     Whether this model is currently enabled.
-    /// </summary>
-    public bool IsEnabled { get; set; } = true;
-
-    /// <summary>
-    ///     Whether this model is free to use (does not consume credits).
-    /// </summary>
-    public bool IsFree { get; set; }
-
-    /// <summary>
-    ///     The mode of the model. Can be "normal", "auto-free", or "auto-all".
-    /// </summary>
-    public string Mode { get; set; } = "normal";
-
-    /// <summary>
-    ///     Navigation property to the provider.
-    /// </summary>
-    public Provider Provider { get; set; } = null!;
 }

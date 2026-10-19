@@ -128,12 +128,12 @@ public class SeedDataTests : IDisposable
         Environment.SetEnvironmentVariable("OPENAI_API_KEY", "env-openai-key");
         Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "env-anthropic-key");
 
-try
-            {
-                // Act
-                await SeedData.InitializeAsync(_context, _appOptions);
+        try
+        {
+            // Act
+            await SeedData.InitializeAsync(_context, _appOptions);
 
-                // Assert
+            // Assert
             var openAi = await _context.Providers.FirstOrDefaultAsync(p => p.Name == "OpenAI");
             openAi.Should().NotBeNull();
             openAi!.ApiKey.Should().Be("env-openai-key");

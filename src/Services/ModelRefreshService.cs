@@ -12,12 +12,12 @@ namespace VanPattenAIRouter.Services;
 /// </summary>
 public class ModelRefreshService : BackgroundService
 {
+    private static readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ModelRefreshService> _logger;
     private readonly TimeSpan _refreshInterval;
-    private readonly IServiceProvider _serviceProvider;
     private readonly RouterOptions _routerOptions;
-    private static readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly IServiceProvider _serviceProvider;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ModelRefreshService" /> class.
@@ -82,9 +82,9 @@ public class ModelRefreshService : BackgroundService
             var context = scope.ServiceProvider.GetRequiredService<AiRouterDbContext>();
 
             var providers = await context.Providers
-                                          .Where(p => p.IsActive && !p.IsVirtual && !string.IsNullOrWhiteSpace(p.ApiKey))
-                                          .OrderByDescending(p => p.Priority)
-                                          .ToListAsync(cancellationToken);
+                                         .Where(p => p.IsActive && !p.IsVirtual && !string.IsNullOrWhiteSpace(p.ApiKey))
+                                         .OrderByDescending(p => p.Priority)
+                                         .ToListAsync(cancellationToken);
 
             _logger.LogInformation("Refreshing models for {Count} active non-virtual providers", providers.Count);
 
@@ -177,7 +177,7 @@ public class ModelRefreshService : BackgroundService
                                                IsEnabled = true,
                                                IsFree = IsFreeModel(m.Id, provider.Name)
                                            })
-                                         .ToList();
+                                          .ToList();
 
             // Update existing models and add new ones
             var existingModels = await context.ProviderModels
@@ -189,15 +189,15 @@ public class ModelRefreshService : BackgroundService
 
             // SOFT DELETE: Disable models that no longer exist instead of removing them
             // This prevents interrupting active streaming requests
-            var modelsToDisable = existingModels.Where(m => !newModelNames.Contains(m.ModelName) && m.IsEnabled).ToList();
+            var modelsToDisable = existingModels.Where(m => !newModelNames.Contains(m.ModelName) && m.IsEnabled)
+                                                .ToList();
             if (modelsToDisable.Count > 0)
-            {
                 foreach (var model in modelsToDisable)
                 {
                     model.IsEnabled = false;
-                    _logger.LogDebug("Disabled obsolete model {ModelName} from provider {ProviderName}", model.ModelName, provider.Name);
+                    _logger.LogDebug("Disabled obsolete model {ModelName} from provider {ProviderName}",
+                                     model.ModelName, provider.Name);
                 }
-            }
 
             // Add new models
             var modelsToAdd = newModels.Where(m => !existingModelNames.Contains(m.ModelName)).ToList();
@@ -231,55 +231,51 @@ public class ModelRefreshService : BackgroundService
         }
     }
 
-/// <summary>
-        ///     Determines if a model is free based on its name and provider.
-        /// </summary>
-        /// <param name="modelName">The model name.</param>
-        /// <param name="providerName">The provider name.</param>
-        /// <returns>True if the model is considered free, false otherwise.</returns>
-        private bool IsFreeModel(string modelName, string providerName)
-        {
-            var lowerName = modelName.ToLowerInvariant();
+    /// <summary>
+    ///     Determines if a model is free based on its name and provider.
+    /// </summary>
+    /// <param name="modelName">The model name.</param>
+    /// <param name="providerName">The provider name.</param>
+    /// <returns>True if the model is considered free, false otherwise.</returns>
+    private bool IsFreeModel(string modelName, string providerName)
+    {
+        var lowerName = modelName.ToLowerInvariant();
 
-            // Models with "free" in name are typically free
-            if (lowerName.Contains("free")) return true;
+        // Models with "free" in name are typically free
+        if (lowerName.Contains("free")) return true;
 
-            // Provider-specific free models (hardcoded fallbacks)
-            if (providerName.Equals("Local Ollama", StringComparison.OrdinalIgnoreCase))
-                return true; // Local models are free
+        // Provider-specific free models (hardcoded fallbacks)
+        if (providerName.Equals("Local Ollama", StringComparison.OrdinalIgnoreCase))
+            return true; // Local models are free
 
-            // Load free models from configuration (Router:FreeModels) - provider prefix -> list of model patterns
-            var freeModelsConfig = _routerOptions.FreeModels;
-            if (freeModelsConfig != null)
+        // Load free models from configuration (Router:FreeModels) - provider prefix -> list of model patterns
+        var freeModelsConfig = _routerOptions.FreeModels;
+        if (freeModelsConfig != null)
+            foreach (var kvp in freeModelsConfig)
             {
-                foreach (var kvp in freeModelsConfig)
-                {
-                    var providerPrefix = kvp.Key;
-                    var freeModelPatterns = kvp.Value;
+                var providerPrefix = kvp.Key;
+                var freeModelPatterns = kvp.Value;
 
-                    if (providerName.StartsWith(providerPrefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (freeModelPatterns.Any(f => lowerName.Contains(f.ToLowerInvariant())))
-                            return true;
-                    }
-                }
+                if (providerName.StartsWith(providerPrefix, StringComparison.OrdinalIgnoreCase))
+                    if (freeModelPatterns.Any(f => lowerName.Contains(f.ToLowerInvariant())))
+                        return true;
             }
 
-            // Generic patterns for free models across providers
-            var freePatterns = new[]
-            {
-                ":free",
-                "-free",
-                "/free",
-                "free-",
-                "kilo-auto",
-                "auto/free"
-            };
+        // Generic patterns for free models across providers
+        var freePatterns = new[]
+        {
+            ":free",
+            "-free",
+            "/free",
+            "free-",
+            "kilo-auto",
+            "auto/free"
+        };
 
-            if (freePatterns.Any(p => lowerName.Contains(p))) return true;
+        if (freePatterns.Any(p => lowerName.Contains(p))) return true;
 
-            return false;
-        }
+        return false;
+    }
 
     /// <summary>
     ///     Parses headers from JSON string or key:value format.
@@ -330,10 +326,10 @@ public class ModelRefreshService : BackgroundService
     /// </summary>
     private class ModelInfo
     {
-/// <summary>
-    ///     Gets or sets the model identifier.
-    /// </summary>
-    public string Id { get; set; } = "";
+        /// <summary>
+        ///     Gets or sets the model identifier.
+        /// </summary>
+        public string Id { get; } = "";
 
         /// <summary>
         ///     Gets or sets the object type.

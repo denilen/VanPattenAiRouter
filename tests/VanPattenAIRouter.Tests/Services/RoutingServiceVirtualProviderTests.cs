@@ -59,7 +59,7 @@ public class RoutingServiceVirtualProviderTests : IDisposable
            .ReturnsAsync(new List<ProviderModel>());
 
         _service = new RoutingService(_mockProviderService.Object, httpClientFactory.Object,
-                                      _mockRetryPolicyService.Object, _logger);
+                                      _mockRetryPolicyService.Object, _logger, _context);
     }
 
     public void Dispose()
@@ -158,12 +158,24 @@ public class RoutingServiceVirtualProviderTests : IDisposable
             Messages = new List<ChatMessage> { new() { Role = "user", Content = "Hello" } }
         };
 
-        // Act - Use reflection to call RouteVirtualProviderAsync
+        // Act - Use reflection to call RouteVirtualProviderAsync (ChatCompletionRequest overload)
         var method = typeof(RoutingService).GetMethod("RouteVirtualProviderAsync",
-                                                      BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = await (Task<ChatCompletionResponse>)method!.Invoke(
-            _service,
-            new object[] { virtualProvider, request, "test-key", 0, Stopwatch.StartNew(), "auto-free", null, CancellationToken.None })!;
+                                                      BindingFlags.NonPublic | BindingFlags.Instance,
+                                                      null,
+                                                      new[]
+                                                      {
+                                                          typeof(Provider), typeof(ChatCompletionRequest),
+                                                          typeof(string), typeof(int), typeof(Stopwatch),
+                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                      },
+                                                      null);
+        var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
+                                                                        new object[]
+                                                                        {
+                                                                            virtualProvider, request, "test-key", 0,
+                                                                            Stopwatch.StartNew(), "auto-free", null,
+                                                                            CancellationToken.None
+                                                                        })!;
 
         // Assert
         result.Should().NotBeNull();
@@ -265,10 +277,22 @@ public class RoutingServiceVirtualProviderTests : IDisposable
 
         // Act
         var method = typeof(RoutingService).GetMethod("RouteVirtualProviderAsync",
-                                                      BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = await (Task<ChatCompletionResponse>)method!.Invoke(
-            _service,
-            new object[] { virtualProvider, request, "test-key", 0, Stopwatch.StartNew(), "auto", null, CancellationToken.None })!;
+                                                      BindingFlags.NonPublic | BindingFlags.Instance,
+                                                      null,
+                                                      new[]
+                                                      {
+                                                          typeof(Provider), typeof(ChatCompletionRequest),
+                                                          typeof(string), typeof(int), typeof(Stopwatch),
+                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                      },
+                                                      null);
+        var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
+                                                                        new object[]
+                                                                        {
+                                                                            virtualProvider, request, "test-key", 0,
+                                                                            Stopwatch.StartNew(), "auto", null,
+                                                                            CancellationToken.None
+                                                                        })!;
 
         // Assert
         result.Should().NotBeNull();
@@ -344,13 +368,22 @@ public class RoutingServiceVirtualProviderTests : IDisposable
         // Act
         using var outputStream = new MemoryStream();
         var method = typeof(RoutingService).GetMethod("RouteVirtualProviderStreamAsync",
-                                                      BindingFlags.NonPublic | BindingFlags.Instance);
-        await (Task)method!.Invoke(
-            _service,
-            new object[]
-            {
-                virtualProvider, request, "test-key", 0, outputStream, Stopwatch.StartNew(), "auto", null, CancellationToken.None
-            })!;
+                                                      BindingFlags.NonPublic | BindingFlags.Instance,
+                                                      null,
+                                                      new[]
+                                                      {
+                                                          typeof(Provider), typeof(ChatCompletionRequest),
+                                                          typeof(string), typeof(int), typeof(Stream),
+                                                          typeof(Stopwatch), typeof(string), typeof(string),
+                                                          typeof(CancellationToken)
+                                                      },
+                                                      null);
+        await (Task)method!.Invoke(_service,
+                                   new object[]
+                                   {
+                                       virtualProvider, request, "test-key", 0, outputStream, Stopwatch.StartNew(),
+                                       "auto", null, CancellationToken.None
+                                   })!;
 
         // Assert
         outputStream.Position = 0;
@@ -402,10 +435,22 @@ public class RoutingServiceVirtualProviderTests : IDisposable
 
         // Act
         var method = typeof(RoutingService).GetMethod("RouteVirtualProviderAsync",
-                                                      BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = await (Task<ChatCompletionResponse>)method!.Invoke(
-            _service,
-            new object[] { virtualProvider, request, "test-key", 0, Stopwatch.StartNew(), "auto-free", null, CancellationToken.None })!;
+                                                      BindingFlags.NonPublic | BindingFlags.Instance,
+                                                      null,
+                                                      new[]
+                                                      {
+                                                          typeof(Provider), typeof(ChatCompletionRequest),
+                                                          typeof(string), typeof(int), typeof(Stopwatch),
+                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                      },
+                                                      null);
+        var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
+                                                                        new object[]
+                                                                        {
+                                                                            virtualProvider, request, "test-key", 0,
+                                                                            Stopwatch.StartNew(), "auto-free", null,
+                                                                            CancellationToken.None
+                                                                        })!;
 
         // Assert
         result.Should().NotBeNull();

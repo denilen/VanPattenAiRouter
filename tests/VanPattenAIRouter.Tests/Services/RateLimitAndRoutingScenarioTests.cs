@@ -1,10 +1,7 @@
-using System.Collections.Generic;
-using System.Net;
-using System.Threading.Tasks;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
-using Moq.Protected;
 using VanPattenAIRouter.Data;
 using VanPattenAIRouter.Models;
 using VanPattenAIRouter.Services;
@@ -23,8 +20,8 @@ public class RateLimitAndRoutingScenarioTests
     public RateLimitAndRoutingScenarioTests()
     {
         var options = new DbContextOptionsBuilder<AiRouterDbContext>()
-            .UseInMemoryDatabase(databaseName: $"RateLimitTest_{System.Guid.NewGuid()}")
-            .Options;
+                     .UseInMemoryDatabase($"RateLimitTest_{Guid.NewGuid()}")
+                     .Options;
         _context = new AiRouterDbContext(options);
 
         var logger = new Mock<ILogger<ProviderService>>().Object;
@@ -44,7 +41,7 @@ public class RateLimitAndRoutingScenarioTests
             IsActive = true,
             IsVirtual = false,
             Priority = 100,
-            RateLimitJson = System.Text.Json.JsonSerializer.Serialize(new RateLimitConfig
+            RateLimitJson = JsonSerializer.Serialize(new RateLimitConfig
             {
                 RequestsPerDay = 100,
                 TokensPerDay = 10000
@@ -56,10 +53,7 @@ public class RateLimitAndRoutingScenarioTests
 
         // Act - Simulate concurrent requests
         var tasks = new List<Task>();
-        for (int i = 0; i < 50; i++)
-        {
-            tasks.Add(_providerService.RecordUsageAsync(provider.Id, 10));
-        }
+        for (var i = 0; i < 50; i++) tasks.Add(_providerService.RecordUsageAsync(provider.Id, 10));
         await Task.WhenAll(tasks);
 
         // Assert - All 50 increments should be recorded atomically
@@ -84,7 +78,7 @@ public class RateLimitAndRoutingScenarioTests
             RequestsToday = 99,
             TokensToday = 9900,
             LastResetDate = DateTime.UtcNow.Date.AddDays(-1), // Yesterday
-            RateLimitJson = System.Text.Json.JsonSerializer.Serialize(new RateLimitConfig
+            RateLimitJson = JsonSerializer.Serialize(new RateLimitConfig
             {
                 RequestsPerDay = 100,
                 TokensPerDay = 10000
@@ -126,7 +120,7 @@ public class RateLimitAndRoutingScenarioTests
             RequestsThisHour = 50,
             TokensThisHour = 5000,
             LastHourReset = lastHour, // Previous hour
-            RateLimitJson = System.Text.Json.JsonSerializer.Serialize(new RateLimitConfig
+            RateLimitJson = JsonSerializer.Serialize(new RateLimitConfig
             {
                 RequestsPerHour = 100,
                 TokensPerHour = 10000
@@ -141,10 +135,10 @@ public class RateLimitAndRoutingScenarioTests
 
         // Assert - Hourly counters reset, daily preserved
         var updatedProvider = await _context.Providers.FindAsync(provider.Id);
-        Assert.Equal(11, updatedProvider.RequestsToday); // Daily preserved
-        Assert.Equal(1010, updatedProvider.TokensToday); // Daily preserved
+        Assert.Equal(11, updatedProvider.RequestsToday);   // Daily preserved
+        Assert.Equal(1010, updatedProvider.TokensToday);   // Daily preserved
         Assert.Equal(1, updatedProvider.RequestsThisHour); // Hourly reset + 1
-        Assert.Equal(10, updatedProvider.TokensThisHour); // Hourly reset + 10
+        Assert.Equal(10, updatedProvider.TokensThisHour);  // Hourly reset + 10
     }
 
     [Fact]
@@ -162,7 +156,11 @@ public class RateLimitAndRoutingScenarioTests
             Priority = 110,
             Models = new List<ProviderModel>
             {
-                new() { ModelName = "google/gemini-2.0-flash-exp:free", ProviderModelName = "google/gemini-2.0-flash-exp:free", IsEnabled = true, IsFree = true }
+                new()
+                {
+                    ModelName = "google/gemini-2.0-flash-exp:free",
+                    ProviderModelName = "google/gemini-2.0-flash-exp:free", IsEnabled = true, IsFree = true
+                }
             }
         };
 
@@ -177,7 +175,11 @@ public class RateLimitAndRoutingScenarioTests
             Priority = 100,
             Models = new List<ProviderModel>
             {
-                new() { ModelName = "google/gemini-2.0-flash-exp:free", ProviderModelName = "google/gemini-2.0-flash-exp:free", IsEnabled = true, IsFree = false } // Same model, not free
+                new()
+                {
+                    ModelName = "google/gemini-2.0-flash-exp:free",
+                    ProviderModelName = "google/gemini-2.0-flash-exp:free", IsEnabled = true, IsFree = false
+                } // Same model, not free
             }
         };
 
@@ -196,7 +198,8 @@ public class RateLimitAndRoutingScenarioTests
         await _context.SaveChangesAsync();
 
         // Act - Request specific model
-        var (provider, mode, specificModel) = await _providerService.ResolveAutoProviderAsync("VanPatten/google/gemini-2.0-flash-exp:free", 100);
+        var (provider, mode, specificModel)
+            = await _providerService.ResolveAutoProviderAsync("VanPatten/google/gemini-2.0-flash-exp:free", 100);
 
         // Assert - Should resolve to virtual provider with specific mode
         Assert.NotNull(provider);

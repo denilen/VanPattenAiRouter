@@ -1,5 +1,5 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -21,8 +21,8 @@ public class ProviderQueryEdgeCaseTests
     public ProviderQueryEdgeCaseTests()
     {
         var options = new DbContextOptionsBuilder<AiRouterDbContext>()
-            .UseInMemoryDatabase(databaseName: $"EdgeCaseTest_{System.Guid.NewGuid()}")
-            .Options;
+                     .UseInMemoryDatabase($"EdgeCaseTest_{Guid.NewGuid()}")
+                     .Options;
         _context = new AiRouterDbContext(options);
 
         var providerLogger = new Mock<ILogger<ProviderService>>().Object;
@@ -44,7 +44,11 @@ public class ProviderQueryEdgeCaseTests
             Priority = 100,
             Models = new List<ProviderModel>
             {
-                new() { ModelName = "openai/gpt-4o-mini", ProviderModelName = "gpt-4o-mini", IsEnabled = true, IsFree = false }
+                new()
+                {
+                    ModelName = "openai/gpt-4o-mini", ProviderModelName = "gpt-4o-mini", IsEnabled = true,
+                    IsFree = false
+                }
             }
         };
 
@@ -59,7 +63,11 @@ public class ProviderQueryEdgeCaseTests
             Priority = 90,
             Models = new List<ProviderModel>
             {
-                new() { ModelName = "my-custom-gpt-4o-mini", ProviderModelName = "custom-gpt-4o-mini", IsEnabled = true, IsFree = false }
+                new()
+                {
+                    ModelName = "my-custom-gpt-4o-mini", ProviderModelName = "custom-gpt-4o-mini", IsEnabled = true,
+                    IsFree = false
+                }
             }
         };
 
@@ -74,7 +82,10 @@ public class ProviderQueryEdgeCaseTests
             Priority = 80,
             Models = new List<ProviderModel>
             {
-                new() { ModelName = "gpt-4o-mini-v2", ProviderModelName = "gpt-4o-mini-v2", IsEnabled = true, IsFree = false }
+                new()
+                {
+                    ModelName = "gpt-4o-mini-v2", ProviderModelName = "gpt-4o-mini-v2", IsEnabled = true, IsFree = false
+                }
             }
         };
 
@@ -136,7 +147,7 @@ public class ProviderQueryEdgeCaseTests
         // The query orders by priority, so higher priority wins
         // But both have same model name in different formats
         // The query should find both but order by priority
-        var providers = await _providerService.GetAllAvailableProvidersForModelAsync("gpt-4o", 0);
+        var providers = await _providerService.GetAllAvailableProvidersForModelAsync("gpt-4o");
         Assert.True(providers.Count >= 1);
     }
 
@@ -160,25 +171,25 @@ public class ProviderQueryEdgeCaseTests
 
         // Use reflection to test private EstimateTokens method (List<ChatMessage> overload)
         var routingServiceType = typeof(RoutingService);
-        var estimateMethods = routingServiceType.GetMethods(
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        var estimateMethods = routingServiceType.GetMethods(BindingFlags.NonPublic | BindingFlags.Static);
         var estimateMethod = estimateMethods
-            .Where(m => m.Name == "EstimateTokens")
-            .Where(m => m.GetParameters().Length == 1)
-            .Where(m => m.GetParameters()[0].ParameterType == typeof(List<ChatMessage>))
-            .FirstOrDefault();
+                            .Where(m => m.Name == "EstimateTokens")
+                            .Where(m => m.GetParameters().Length == 1)
+                            .Where(m => m.GetParameters()[0].ParameterType == typeof(List<ChatMessage>))
+                            .FirstOrDefault();
 
         // Act - Estimate tokens for messages
         var messages = new List<ChatMessage>
         {
-            new() { Role = "user", Content = "Hello, how are you?" }, // ~5 tokens
+            new() { Role = "user", Content = "Hello, how are you?" },                       // ~5 tokens
             new() { Role = "assistant", Content = "I'm doing well, thank you for asking!" } // ~10 tokens
         };
 
         var estimated = (int)estimateMethod!.Invoke(null, new object[] { messages })!;
 
         // Assert - Should be roughly (5+10)/4 = ~3-4 tokens, NOT 1000+ (which would be MaxTokens)
-        Assert.True(estimated < 50, $"Estimated tokens {estimated} should be small (input only), not include MaxTokens");
+        Assert.True(estimated < 50,
+                    $"Estimated tokens {estimated} should be small (input only), not include MaxTokens");
         Assert.True(estimated > 0, "Should estimate at least some tokens");
     }
 
@@ -198,7 +209,7 @@ public class ProviderQueryEdgeCaseTests
             RequestsToday = 100,
             TokensToday = 10000,
             LastResetDate = DateTime.UtcNow.Date,
-            RateLimitJson = System.Text.Json.JsonSerializer.Serialize(new RateLimitConfig
+            RateLimitJson = JsonSerializer.Serialize(new RateLimitConfig
             {
                 RequestsPerDay = 100,
                 TokensPerDay = 10000
@@ -239,7 +250,8 @@ public class ProviderQueryEdgeCaseTests
         await _context.SaveChangesAsync();
 
         // Act - Resolve specific model
-        var (provider, mode, specificModel) = await _providerService.ResolveAutoProviderAsync("VanPatten/test/model", 100);
+        var (provider, mode, specificModel)
+            = await _providerService.ResolveAutoProviderAsync("VanPatten/test/model", 100);
 
         // Assert - Should resolve to virtual provider but underlying check should find available provider
         Assert.NotNull(provider);
@@ -301,7 +313,7 @@ public class ProviderQueryEdgeCaseTests
             RequestsToday = 100,
             TokensToday = 10000,
             LastResetDate = DateTime.UtcNow.Date,
-            RateLimitJson = System.Text.Json.JsonSerializer.Serialize(new RateLimitConfig
+            RateLimitJson = JsonSerializer.Serialize(new RateLimitConfig
             {
                 RequestsPerDay = 100,
                 TokensPerDay = 10000
@@ -316,7 +328,7 @@ public class ProviderQueryEdgeCaseTests
         await _context.SaveChangesAsync();
 
         // Act
-        var available = await _providerService.GetAllAvailableProvidersForModelAsync("test/model", 0);
+        var available = await _providerService.GetAllAvailableProvidersForModelAsync("test/model");
 
         // Assert - Should return only provider1 and provider2 (not rate limited provider3)
         Assert.Equal(2, available.Count);

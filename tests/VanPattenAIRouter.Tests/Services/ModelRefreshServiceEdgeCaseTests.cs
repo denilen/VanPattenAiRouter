@@ -18,7 +18,6 @@ namespace VanPattenAIRouter.Tests.Services;
 
 public class ModelRefreshServiceEdgeCaseTests : IDisposable
 {
-    private readonly IOptions<RouterOptions> _routerOptions;
     private readonly AiRouterDbContext _context;
     private readonly HttpClient _httpClient;
     private readonly MockHttpMessageHandler _mockHttp;
@@ -27,6 +26,7 @@ public class ModelRefreshServiceEdgeCaseTests : IDisposable
     private readonly Mock<IServiceScope> _mockScope;
     private readonly Mock<IServiceScopeFactory> _mockScopeFactory;
     private readonly Mock<IServiceProvider> _mockServiceProvider;
+    private readonly IOptions<RouterOptions> _routerOptions;
 
     public ModelRefreshServiceEdgeCaseTests()
     {

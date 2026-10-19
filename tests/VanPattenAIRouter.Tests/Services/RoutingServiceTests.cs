@@ -58,7 +58,7 @@ public class RoutingServiceTests : IDisposable
            .Returns(Policy<bool>.Handle<Exception>().WaitAndRetryAsync(0, _ => TimeSpan.Zero, (_, _, _, _) => { }));
 
         _service = new RoutingService(_mockProviderService.Object, httpClientFactory.Object,
-                                      _mockRetryPolicyService.Object, _logger);
+                                      _mockRetryPolicyService.Object, _logger, _context);
     }
 
     public void Dispose()
