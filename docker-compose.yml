@@ -1,7 +1,9 @@
 version: '3.8'
 
 services:
-  vanpatten-airrouter:
+  vanpattenairouter:
+    image: vanpattenairouter
+    container_name: vanpattenairouter
     build:
       context: .
       dockerfile: Dockerfile
@@ -9,23 +11,10 @@ services:
       - "10080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - Database__Path=/app/data/vanpatten-airrouter.db
+      - Database__RecreateOnStartup=false
     volumes:
       - ./data:/app/data
-      - ./src/appsettings.json:/app/appsettings.json:ro
-      - ./src/appsettings.Development.json:/app/appsettings.Development.json:ro
+      - ./appsettings.json:/app/appsettings.json:ro
+      - ./appsettings.Development.json:/app/appsettings.Development.json:ro
     restart: unless-stopped
-
-    # Optional: Ollama for local models
-#   ollama:
-#     image: ollama/ollama:latest
-#     ports:
-#       - "11434:11434"
-#     volumes:
-#       - ollama_data:/root/.ollama
-#     restart: unless-stopped
-#     profiles:
-#       - local
-
-# volumes:
-#   ollama_data:

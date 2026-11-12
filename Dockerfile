@@ -1,21 +1,16 @@
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS base
-WORKDIR /app
-EXPOSE 8080
-
+# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /src
 COPY ["src/VanPattenAIRouter.csproj", "src/"]
-COPY ["tests/VanPattenAIRouter.Tests/VanPattenAIRouter.Tests.csproj", "tests/VanPattenAIRouter.Tests/"]
 RUN dotnet restore "src/VanPattenAIRouter.csproj"
 COPY . .
 WORKDIR "/src/src"
-RUN dotnet build "VanPattenAIRouter.csproj" -c Release -o /app/build
-
-FROM build AS publish
-WORKDIR "/src/src"
 RUN dotnet publish "VanPattenAIRouter.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM base AS final
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
+RUN mkdir -p /app/data
+EXPOSE 8080
 ENTRYPOINT ["dotnet", "VanPattenAIRouter.dll"]

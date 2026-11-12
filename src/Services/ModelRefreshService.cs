@@ -329,7 +329,7 @@ public class ModelRefreshService : BackgroundService
         /// <summary>
         ///     Gets or sets the model identifier.
         /// </summary>
-        public string Id { get; } = "";
+        public string Id { get; set; } = "";
 
         /// <summary>
         ///     Gets or sets the object type.
