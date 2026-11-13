@@ -24,4 +24,14 @@ public class RateLimitConfig
     ///     Maximum number of tokens allowed per hour. Set to 0 to disable hourly token limit.
     /// </summary>
     public int TokensPerHour { get; set; } = 0;
+
+    /// <summary>
+    ///     Maximum number of requests allowed per minute. Set to 0 to disable per-minute limit.
+    /// </summary>
+    public int RequestsPerMinute { get; set; } = 0;
+
+    /// <summary>
+    ///     Maximum number of tokens allowed per minute. Set to 0 to disable per-minute token limit.
+    /// </summary>
+    public int TokensPerMinute { get; set; } = 0;
 }

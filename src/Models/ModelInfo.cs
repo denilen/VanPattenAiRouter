@@ -47,6 +47,12 @@ public class ModelInfo
     public string? Parent { get; set; }
 
     /// <summary>
+    ///     The maximum context window size for the model.
+    /// </summary>
+    [JsonPropertyName("context_window")]
+    public int? ContextWindow { get; set; }
+
+    /// <summary>
     ///     Indicates whether the model is free to use (does not consume credits).
     /// </summary>
     [JsonIgnore]

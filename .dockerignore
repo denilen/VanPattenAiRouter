@@ -23,3 +23,44 @@
 **/values.dev.yaml
 LICENSE
 README.md
+
+# Ignore test results and coverage
+TestResults/
+**/TestResults/
+**/coverage/
+**/CoverageReport/
+**/coverage-report/
+*.trx
+*.html
+*.xml
+*.json
+*.log
+
+# Ignore local config
+appsettings.Docker.json
+
+# Ignore solution files
+*.sln
+*.sln.DotSettings*
+
+# Ignore local data and logs
+data/
+**/data/
+logs/
+**/logs/
+
+# Ignore tests
+tests/
+**/tests/
+
+# Ignore plan
+plan/
+**/plan/
+
+# Ignore Yandex.Disk
+~/Yandex.Disk.localized/
+~/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

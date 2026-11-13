@@ -95,9 +95,23 @@ public class Provider
 
     /// <summary>
     ///     The hour when the hourly counters were last reset (UTC).
-    ///     Initialized to minimum value so first check will trigger reset.
     /// </summary>
     public DateTime LastHourReset { get; set; } = DateTime.MinValue;
+
+    /// <summary>
+    ///     Number of requests made in the current minute.
+    /// </summary>
+    public int RequestsThisMinute { get; set; }
+
+    /// <summary>
+    ///     Number of tokens consumed in the current minute.
+    /// </summary>
+    public int TokensThisMinute { get; set; }
+
+    /// <summary>
+    ///     The minute when the per-minute counters were last reset (UTC).
+    /// </summary>
+    public DateTime LastMinuteReset { get; set; } = DateTime.MinValue;
 
     /// <summary>
     ///     Navigation property for models offered by this provider.
@@ -116,6 +130,7 @@ public class Provider
     /// <summary>
     ///     Gets a value indicating whether the provider has exceeded its rate limits.
     ///     This property does NOT perform lazy reset - call ResetIfNeeded() on the service instead.
+    ///     Checks all configured windows (day/hour/minute): provider is limited if any enabled limit is exceeded.
     /// </summary>
     public bool IsRateLimited
     {
@@ -123,12 +138,30 @@ public class Provider
         {
             var rateLimit = RateLimit;
 
-            // Use daily limits if configured (RequestsPerDay > 0), otherwise use hourly limits
-            if (rateLimit.RequestsPerDay > 0)
-                return RequestsToday >= rateLimit.RequestsPerDay || TokensToday >= rateLimit.TokensPerDay;
+            if (rateLimit.RequestsPerDay > 0 &&
+                (RequestsToday >= rateLimit.RequestsPerDay ||
+                 (rateLimit.TokensPerDay > 0 && TokensToday >= rateLimit.TokensPerDay)))
+                return true;
 
-            // Use hourly limits
-            return RequestsThisHour >= rateLimit.RequestsPerHour || TokensThisHour >= rateLimit.TokensPerHour;
+            if (rateLimit.RequestsPerHour > 0 &&
+                (RequestsThisHour >= rateLimit.RequestsPerHour ||
+                 (rateLimit.TokensPerHour > 0 && TokensThisHour >= rateLimit.TokensPerHour)))
+                return true;
+
+            if (rateLimit.RequestsPerMinute > 0 &&
+                (RequestsThisMinute >= rateLimit.RequestsPerMinute ||
+                 (rateLimit.TokensPerMinute > 0 && TokensThisMinute >= rateLimit.TokensPerMinute)))
+                return true;
+
+            // Token-only limits (if configured without request limit)
+            if (rateLimit.RequestsPerDay == 0 && rateLimit.TokensPerDay > 0 && TokensToday >= rateLimit.TokensPerDay)
+                return true;
+            if (rateLimit.RequestsPerHour == 0 && rateLimit.TokensPerHour > 0 && TokensThisHour >= rateLimit.TokensPerHour)
+                return true;
+            if (rateLimit.RequestsPerMinute == 0 && rateLimit.TokensPerMinute > 0 && TokensThisMinute >= rateLimit.TokensPerMinute)
+                return true;
+
+            return false;
         }
     }
 
@@ -143,4 +176,17 @@ public class Provider
     public bool IsHourlyResetNeeded =>
         LastHourReset != new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day,
                                       DateTime.UtcNow.Hour, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    ///     Checks if a new minute has started since last reset.
+    /// </summary>
+    public bool IsMinuteResetNeeded
+    {
+        get
+        {
+            var now = DateTime.UtcNow;
+            var thisMinute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc);
+            return LastMinuteReset != thisMinute;
+        }
+    }
 }

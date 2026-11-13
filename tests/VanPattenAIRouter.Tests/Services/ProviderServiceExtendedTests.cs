@@ -83,7 +83,7 @@ public class ProviderServiceExtendedTests : IDisposable
         // Assert
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("model-2");
-        result[0].OwnedBy.Should().Be("Available");
+        result[0].OwnedBy.Should().Be("vanpattenairouter");
     }
 
     [Fact]
@@ -422,8 +422,8 @@ public class ProviderServiceExtendedTests : IDisposable
 
         // Assert - Virtual provider models should be included
         result.Should().HaveCount(2);
-        result.Should().Contain(m => m.Id == "auto-free" && m.OwnedBy == "Virtual");
-        result.Should().Contain(m => m.Id == "auto-all" && m.OwnedBy == "Virtual");
+        result.Should().Contain(m => m.Id == "auto-free" && m.OwnedBy == "vanpattenairouter");
+        result.Should().Contain(m => m.Id == "auto-all" && m.OwnedBy == "vanpattenairouter");
     }
 
     [Fact]

@@ -139,7 +139,7 @@ public interface IProviderService
     Task RecordUsageAsync(int providerId, int tokensUsed);
 
     /// <summary>
-    ///     Resets daily and hourly usage counters for providers where the period has elapsed.
+    ///     Resets daily, hourly and per-minute usage counters for providers where the period has elapsed.
     /// </summary>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task ResetDailyUsageIfNeededAsync();
@@ -368,7 +368,7 @@ public class ProviderService : IProviderService
     {
         _logger.LogDebug("Getting available models");
 
-        // Reset daily/hourly usage if needed
+        // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
 
         var models = await _context.ProviderModels
@@ -382,40 +382,46 @@ public class ProviderService : IProviderService
         var availableModels = models
                              .Where(m => !m.Provider.IsRateLimited)
                              .Select(m => new ModelInfo
-                              {
-                                  Id = m.ModelName,
-                                  Object = "model",
-                                  Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                  OwnedBy = m.Provider.Name,
-                                  Permission = new List<ModelPermission>
-                                  {
-                                      new()
-                                      {
-                                          Id = $"modelperm-{Guid.NewGuid():N}[..8]",
-                                          Object = "model_permission",
-                                          Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                          AllowCompletions = true,
-                                          AllowChatCompletions = true,
-                                          AllowEmbeddings = true,
-                                          AllowFineTuning = false,
-                                          AllowSampling = true,
-                                          AllowLogprobs = true,
-                                          AllowSearchIndices = false,
-                                          AllowView = true,
-                                          Model = m.ModelName,
-                                          Organization = null,
-                                          Group = null,
-                                          IsBlocking = false
-                                      }
-                                  },
-                                  Root = null,
-                                  Parent = null,
-                                  IsFree = m.IsFree,
-                                  Provider = m.Provider.Name
-                              })
+                             {
+                                 Id = m.ModelName,
+                                 Object = "model",
+                                 Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                 OwnedBy = "vanpattenairouter",
+                                 ContextWindow = GetModelContextWindow(m.ModelName),
+                                 Permission = new List<ModelPermission>
+                                 {
+                                     new()
+                                     {
+                                         Id = $"modelperm-{Guid.NewGuid():N}[..8]",
+                                         Object = "model_permission",
+                                         Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                         AllowCompletions = true,
+                                         AllowChatCompletions = true,
+                                         AllowEmbeddings = true,
+                                         AllowFineTuning = false,
+                                         AllowSampling = true,
+                                         AllowLogprobs = true,
+                                         AllowSearchIndices = false,
+                                         AllowView = true,
+                                         Model = m.ModelName,
+                                         Organization = null,
+                                         Group = null,
+                                         IsBlocking = false
+                                     }
+                                 },
+                                 Root = null,
+                                 Parent = null,
+                                 IsFree = m.IsFree,
+                                 Provider = m.Provider.Name
+                             })
                              .ToList();
 
-        var distinctModels = availableModels.DistinctBy(m => m.Id).ToList();
+        var distinctModels = availableModels
+            .DistinctBy(m => m.Id)
+            .OrderByDescending(IsFreeByName)
+            .ThenByDescending(m => m.IsFree)
+            .ThenBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         _logger.LogInformation("Retrieved {Count} available models", distinctModels.Count);
 
         return distinctModels;
@@ -426,7 +432,7 @@ public class ProviderService : IProviderService
     {
         _logger.LogDebug("Getting grouped available models");
 
-        // Reset daily/hourly usage if needed
+        // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
 
         var models = await _context.ProviderModels
@@ -445,11 +451,11 @@ public class ProviderService : IProviderService
         var distinctModels = availableModels
                             .GroupBy(m => m.ModelName)
                             .Select(g => new
-                             {
-                                 ModelName = g.Key,
-                                 IsFree = g.Any(x => x.IsFree), // Free if any provider offers it free
-                                 Providers = g.Select(x => new { x.Provider.Name, x.IsFree }).ToList()
-                             })
+                            {
+                                ModelName = g.Key,
+                                IsFree = g.Any(x => x.IsFree), // Free if any provider offers it free
+                                Providers = g.Select(x => new { x.Provider.Name, x.IsFree }).ToList()
+                            })
                             .ToList();
 
         var response = new ModelsGroupedResponse();
@@ -481,34 +487,35 @@ public class ProviderService : IProviderService
                         .Where(m => m.IsFree)
                         .OrderBy(m => m.ModelName)
                         .Select(m => new ModelInfo
-                         {
-                             Id = m.ModelName,
-                             Object = "model",
-                             Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                             OwnedBy = string.Join(", ", m.Providers.Select(p => p.Name).Distinct()),
-                             Permission = defaultPermissions.Select(p => new ModelPermission
-                             {
-                                 Id = p.Id,
-                                 Object = p.Object,
-                                 Created = p.Created,
-                                 AllowCompletions = p.AllowCompletions,
-                                 AllowChatCompletions = p.AllowChatCompletions,
-                                 AllowEmbeddings = p.AllowEmbeddings,
-                                 AllowFineTuning = p.AllowFineTuning,
-                                 AllowSampling = p.AllowSampling,
-                                 AllowLogprobs = p.AllowLogprobs,
-                                 AllowSearchIndices = p.AllowSearchIndices,
-                                 AllowView = p.AllowView,
-                                 Model = m.ModelName,
-                                 Organization = p.Organization,
-                                 Group = p.Group,
-                                 IsBlocking = p.IsBlocking
-                             }).ToList(),
-                             Root = null,
-                             Parent = null,
-                             IsFree = true,
-                             Provider = string.Join(", ", m.Providers.Select(p => p.Name).Distinct())
-                         })
+                        {
+                            Id = m.ModelName,
+                            Object = "model",
+                            Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                            OwnedBy = "vanpattenairouter",
+                            ContextWindow = GetModelContextWindow(m.ModelName),
+                            Permission = defaultPermissions.Select(p => new ModelPermission
+                            {
+                                Id = p.Id,
+                                Object = p.Object,
+                                Created = p.Created,
+                                AllowCompletions = p.AllowCompletions,
+                                AllowChatCompletions = p.AllowChatCompletions,
+                                AllowEmbeddings = p.AllowEmbeddings,
+                                AllowFineTuning = p.AllowFineTuning,
+                                AllowSampling = p.AllowSampling,
+                                AllowLogprobs = p.AllowLogprobs,
+                                AllowSearchIndices = p.AllowSearchIndices,
+                                AllowView = p.AllowView,
+                                Model = m.ModelName,
+                                Organization = p.Organization,
+                                Group = p.Group,
+                                IsBlocking = p.IsBlocking
+                            }).ToList(),
+                            Root = null,
+                            Parent = null,
+                            IsFree = true,
+                            Provider = string.Join(", ", m.Providers.Select(p => p.Name).Distinct())
+                        })
                         .ToList();
 
         if (freeModels.Count > 0)
@@ -534,35 +541,38 @@ public class ProviderService : IProviderService
             var providerModels = providerGroup
                                 .GroupBy(m => m.ModelName)
                                 .Select(g => new ModelInfo
-                                 {
-                                     Id = g.Key,
-                                     Object = "model",
-                                     Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                                     OwnedBy = providerName,
-                                     Permission = defaultPermissions.Select(p => new ModelPermission
-                                     {
-                                         Id = p.Id,
-                                         Object = p.Object,
-                                         Created = p.Created,
-                                         AllowCompletions = p.AllowCompletions,
-                                         AllowChatCompletions = p.AllowChatCompletions,
-                                         AllowEmbeddings = p.AllowEmbeddings,
-                                         AllowFineTuning = p.AllowFineTuning,
-                                         AllowSampling = p.AllowSampling,
-                                         AllowLogprobs = p.AllowLogprobs,
-                                         AllowSearchIndices = p.AllowSearchIndices,
-                                         AllowView = p.AllowView,
-                                         Model = g.Key,
-                                         Organization = p.Organization,
-                                         Group = p.Group,
-                                         IsBlocking = p.IsBlocking
-                                     }).ToList(),
-                                     Root = null,
-                                     Parent = null,
-                                     IsFree = g.Any(x => x.IsFree),
-                                     Provider = providerName
-                                 })
-                                .OrderBy(m => m.Id)
+                                {
+                                    Id = g.Key,
+                                    Object = "model",
+                                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                                    OwnedBy = "vanpattenairouter",
+                                    ContextWindow = GetModelContextWindow(g.Key),
+                                    Permission = defaultPermissions.Select(p => new ModelPermission
+                                    {
+                                        Id = p.Id,
+                                        Object = p.Object,
+                                        Created = p.Created,
+                                        AllowCompletions = p.AllowCompletions,
+                                        AllowChatCompletions = p.AllowChatCompletions,
+                                        AllowEmbeddings = p.AllowEmbeddings,
+                                        AllowFineTuning = p.AllowFineTuning,
+                                        AllowSampling = p.AllowSampling,
+                                        AllowLogprobs = p.AllowLogprobs,
+                                        AllowSearchIndices = p.AllowSearchIndices,
+                                        AllowView = p.AllowView,
+                                        Model = g.Key,
+                                        Organization = p.Organization,
+                                        Group = p.Group,
+                                        IsBlocking = p.IsBlocking
+                                    }).ToList(),
+                                    Root = null,
+                                    Parent = null,
+                                    IsFree = g.Any(x => x.IsFree),
+                                    Provider = providerName
+                                })
+                                .OrderByDescending(IsFreeByName)
+                                .ThenByDescending(m => m.IsFree)
+                                .ThenBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
                                 .ToList();
 
             response.Groups.Add(new ModelGroup
@@ -603,13 +613,48 @@ public class ProviderService : IProviderService
         return providerModel?.Provider;
     }
 
+    private static bool WouldExceedConfiguredLimits(Provider provider, int estimatedTokens)
+    {
+        if (estimatedTokens <= 0) return false;
+        var rateLimit = provider.RateLimit;
+
+        if (rateLimit.RequestsPerDay > 0)
+        {
+            if (provider.RequestsToday + 1 > rateLimit.RequestsPerDay ||
+                (rateLimit.TokensPerDay > 0 && provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay))
+                return true;
+        }
+        else if (rateLimit.TokensPerDay > 0 && provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay)
+            return true;
+
+        if (rateLimit.RequestsPerHour > 0)
+        {
+            if (provider.RequestsThisHour + 1 > rateLimit.RequestsPerHour ||
+                (rateLimit.TokensPerHour > 0 && provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour))
+                return true;
+        }
+        else if (rateLimit.TokensPerHour > 0 && provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour)
+            return true;
+
+        if (rateLimit.RequestsPerMinute > 0)
+        {
+            if (provider.RequestsThisMinute + 1 > rateLimit.RequestsPerMinute ||
+                (rateLimit.TokensPerMinute > 0 && provider.TokensThisMinute + estimatedTokens > rateLimit.TokensPerMinute))
+                return true;
+        }
+        else if (rateLimit.TokensPerMinute > 0 && provider.TokensThisMinute + estimatedTokens > rateLimit.TokensPerMinute)
+            return true;
+
+        return false;
+    }
+
     /// <inheritdoc />
     public async Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0)
     {
         _logger.LogDebug("Finding available provider for model: {ModelName} (estimated tokens: {Tokens})", modelName,
                          estimatedTokens);
 
-        // Reset daily/hourly usage if needed
+        // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
 
         // Match exact or by suffix (e.g., "openai/gpt-4o-mini" matches "gpt-4o-mini")
@@ -626,34 +671,12 @@ public class ProviderService : IProviderService
             // Check rate limits using IsRateLimited property (which now relies on pre-reset)
             if (!provider.IsRateLimited)
             {
-                // Check if estimated tokens would exceed limit
-                var rateLimit = provider.RateLimit;
-                if (estimatedTokens > 0)
+                if (WouldExceedConfiguredLimits(provider, estimatedTokens))
                 {
-                    if (rateLimit.RequestsPerDay > 0)
-                    {
-                        // Daily limit - check both requests and tokens
-                        if (provider.RequestsToday + 1 > rateLimit.RequestsPerDay ||
-                            provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed daily limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // Hourly limit - check both requests and tokens
-                        if (provider.RequestsThisHour + 1 > rateLimit.RequestsPerHour ||
-                            provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed hourly limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
+                    _logger.LogWarning(
+                        "Provider {ProviderName} would exceed configured limit with estimated {Tokens} tokens",
+                        provider.Name, estimatedTokens);
+                    continue;
                 }
 
                 _logger.LogInformation("Selected provider {ProviderName} for model {ModelName} (priority: {Priority})",
@@ -674,7 +697,7 @@ public class ProviderService : IProviderService
         _logger.LogDebug("Getting all available providers for model: {ModelName} (estimated tokens: {Tokens})",
                          modelName, estimatedTokens);
 
-        // Reset daily/hourly usage if needed
+        // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
 
         // Match exact or by suffix (e.g., "openai/gpt-4o-mini" matches "gpt-4o-mini")
@@ -692,34 +715,12 @@ public class ProviderService : IProviderService
             // Check rate limits using IsRateLimited property
             if (!provider.IsRateLimited)
             {
-                // Check if estimated tokens would exceed limit
-                var rateLimit = provider.RateLimit;
-                if (estimatedTokens > 0)
+                if (WouldExceedConfiguredLimits(provider, estimatedTokens))
                 {
-                    if (rateLimit.RequestsPerDay > 0)
-                    {
-                        // Daily limit - check both requests and tokens
-                        if (provider.RequestsToday + 1 > rateLimit.RequestsPerDay ||
-                            provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed daily limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // Hourly limit - check both requests and tokens
-                        if (provider.RequestsThisHour + 1 > rateLimit.RequestsPerHour ||
-                            provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed hourly limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
+                    _logger.LogWarning(
+                        "Provider {ProviderName} would exceed configured limit with estimated {Tokens} tokens",
+                        provider.Name, estimatedTokens);
+                    continue;
                 }
 
                 availableProviders.Add(provider);
@@ -741,7 +742,7 @@ public class ProviderService : IProviderService
     {
         _logger.LogDebug("Getting available embedding providers (estimated tokens: {Tokens})", estimatedTokens);
 
-        // Reset daily/hourly usage if needed
+        // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
 
         // Find providers that have embedding models (model name contains "embedding")
@@ -761,34 +762,12 @@ public class ProviderService : IProviderService
             // Check rate limits using IsRateLimited property
             if (!provider.IsRateLimited)
             {
-                // Check if estimated tokens would exceed limit
-                var rateLimit = provider.RateLimit;
-                if (estimatedTokens > 0)
+                if (WouldExceedConfiguredLimits(provider, estimatedTokens))
                 {
-                    if (rateLimit.RequestsPerDay > 0)
-                    {
-                        // Daily limit - check both requests and tokens
-                        if (provider.RequestsToday + 1 > rateLimit.RequestsPerDay ||
-                            provider.TokensToday + estimatedTokens > rateLimit.TokensPerDay)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed daily limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // Hourly limit - check both requests and tokens
-                        if (provider.RequestsThisHour + 1 > rateLimit.RequestsPerHour ||
-                            provider.TokensThisHour + estimatedTokens > rateLimit.TokensPerHour)
-                        {
-                            _logger.LogWarning(
-                                "Provider {ProviderName} would exceed hourly limit with estimated {Tokens} tokens",
-                                provider.Name, estimatedTokens);
-                            continue;
-                        }
-                    }
+                    _logger.LogWarning(
+                        "Provider {ProviderName} would exceed configured limit with estimated {Tokens} tokens",
+                        provider.Name, estimatedTokens);
+                    continue;
                 }
 
                 availableProviders.Add(provider);
@@ -810,6 +789,7 @@ public class ProviderService : IProviderService
         var now = DateTime.UtcNow;
         var today = now.Date;
         var thisHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc);
+        var thisMinute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc);
 
         var isRelational = _context.Database.IsRelational();
 
@@ -824,11 +804,15 @@ public class ProviderService : IProviderService
                     LastResetDate = CASE WHEN LastResetDate != @today THEN @today ELSE LastResetDate END,
                     RequestsThisHour = CASE WHEN LastHourReset != @thisHour THEN 1 ELSE RequestsThisHour + 1 END,
                     TokensThisHour = CASE WHEN LastHourReset != @thisHour THEN @tokens ELSE TokensThisHour + @tokens END,
-                    LastHourReset = CASE WHEN LastHourReset != @thisHour THEN @thisHour ELSE LastHourReset END
+                    LastHourReset = CASE WHEN LastHourReset != @thisHour THEN @thisHour ELSE LastHourReset END,
+                    RequestsThisMinute = CASE WHEN LastMinuteReset != @thisMinute THEN 1 ELSE RequestsThisMinute + 1 END,
+                    TokensThisMinute = CASE WHEN LastMinuteReset != @thisMinute THEN @tokens ELSE TokensThisMinute + @tokens END,
+                    LastMinuteReset = CASE WHEN LastMinuteReset != @thisMinute THEN @thisMinute ELSE LastMinuteReset END
                 WHERE Id = @providerId", new SqliteParameter("@providerId", providerId),
                                                        new SqliteParameter("@tokens", tokensUsed),
                                                        new SqliteParameter("@today", today),
-                                                       new SqliteParameter("@thisHour", thisHour));
+                                                       new SqliteParameter("@thisHour", thisHour),
+                                                       new SqliteParameter("@thisMinute", thisMinute));
 
             _logger.LogDebug("Recorded usage atomically for provider {ProviderId}: +1 request, +{Tokens} tokens",
                              providerId, tokensUsed);
@@ -855,13 +839,21 @@ public class ProviderService : IProviderService
                     provider.LastHourReset = thisHour;
                 }
 
-                // Increment daily counters
+                // Reset per-minute counters if needed
+                if (provider.LastMinuteReset != thisMinute)
+                {
+                    provider.RequestsThisMinute = 0;
+                    provider.TokensThisMinute = 0;
+                    provider.LastMinuteReset = thisMinute;
+                }
+
+                // Increment counters
                 provider.RequestsToday++;
                 provider.TokensToday += tokensUsed;
-
-                // Increment hourly counters
                 provider.RequestsThisHour++;
                 provider.TokensThisHour += tokensUsed;
+                provider.RequestsThisMinute++;
+                provider.TokensThisMinute += tokensUsed;
 
                 await _context.SaveChangesAsync();
 
@@ -878,6 +870,7 @@ public class ProviderService : IProviderService
         var now = DateTime.UtcNow;
         var today = now.Date;
         var thisHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc);
+        var thisMinute = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc);
 
         // Check if we're using a relational database (SQLite) or in-memory
         var isRelational = _context.Database.IsRelational();
@@ -898,16 +891,24 @@ public class ProviderService : IProviderService
                                                                               new SqliteParameter(
                                                                                   "@thisHour", thisHour));
 
-            if (dailyResetCount > 0) _logger.LogInformation("Reset daily usage for {Count} providers", dailyResetCount);
+            var minuteResetCount = await _context.Database.ExecuteSqlRawAsync(@"
+                UPDATE Providers 
+                SET RequestsThisMinute = 0, TokensThisMinute = 0, LastMinuteReset = @thisMinute
+                WHERE LastMinuteReset < @thisMinute",
+                                                                              new SqliteParameter(
+                                                                                  "@thisMinute", thisMinute));
 
+            if (dailyResetCount > 0) _logger.LogInformation("Reset daily usage for {Count} providers", dailyResetCount);
             if (hourlyResetCount > 0)
                 _logger.LogInformation("Reset hourly usage for {Count} providers", hourlyResetCount);
+            if (minuteResetCount > 0)
+                _logger.LogInformation("Reset per-minute usage for {Count} providers", minuteResetCount);
         }
         else
         {
             // Fallback for in-memory database (tests) - use entity-based approach
             var providersToReset = await _context.Providers
-                                                 .Where(p => p.LastResetDate < today || p.LastHourReset < thisHour)
+                                                 .Where(p => p.LastResetDate < today || p.LastHourReset < thisHour || p.LastMinuteReset < thisMinute)
                                                  .ToListAsync();
 
             if (providersToReset.Count > 0)
@@ -930,6 +931,15 @@ public class ProviderService : IProviderService
                         provider.TokensThisHour = 0;
                         provider.LastHourReset = thisHour;
                         _logger.LogDebug("Reset hourly usage for provider: {ProviderName}", provider.Name);
+                    }
+
+                    // Reset per-minute if needed
+                    if (provider.LastMinuteReset < thisMinute)
+                    {
+                        provider.RequestsThisMinute = 0;
+                        provider.TokensThisMinute = 0;
+                        provider.LastMinuteReset = thisMinute;
+                        _logger.LogDebug("Reset per-minute usage for provider: {ProviderName}", provider.Name);
                     }
                 }
 
@@ -1120,5 +1130,41 @@ public class ProviderService : IProviderService
         if (headers == null || headers.Count == 0) return null;
 
         return JsonSerializer.Serialize(headers);
+    }
+
+    /// <summary>
+    ///     Determines whether a model should be treated as free for ordering purposes.
+    /// </summary>
+    private static bool IsFreeModel(ModelInfo model)
+    {
+        return IsFreeByName(model) || model.IsFree;
+    }
+
+    /// <summary>
+    ///     Determines whether a model name indicates it is free (e.g. ends with :free or /free).
+    /// </summary>
+    private static bool IsFreeByName(ModelInfo model)
+    {
+        var id = model.Id ?? string.Empty;
+        return id.EndsWith(":free", StringComparison.OrdinalIgnoreCase)
+               || id.EndsWith("-free", StringComparison.OrdinalIgnoreCase)
+               || id.EndsWith("/free", StringComparison.OrdinalIgnoreCase)
+               || id.Equals("free", StringComparison.OrdinalIgnoreCase)
+               || id.Contains(":free", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Gets the context window size for known models.
+    /// </summary>
+    private static int? GetModelContextWindow(string modelName)
+    {
+        return modelName switch
+        {
+            "nvidia/nemotron-3-ultra-550b-a55b" => 1048576,
+            "nvidia/nemotron-3-ultra-550b-a55b:free" => 1048576,
+            "kilo-auto/nemotron-3-ultra-550b-a55b" => 1048576,
+            "kilo-auto/nemotron-3-ultra-550b-a55b:free" => 1048576,
+            _ => null
+        };
     }
 }

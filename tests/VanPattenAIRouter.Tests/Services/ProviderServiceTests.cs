@@ -331,7 +331,7 @@ public class ProviderServiceTests : IDisposable
         // Assert
         result.Should().HaveCount(1);
         result[0].Id.Should().Be("enabled-model");
-        result[0].OwnedBy.Should().Be("Active Provider");
+        result[0].OwnedBy.Should().Be("vanpattenairouter");
     }
 
     [Fact]
@@ -548,5 +548,101 @@ public class ProviderServiceTests : IDisposable
             result.Should().BeNull();
         else
             result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task GetAvailableModelsAsync_ReturnsFreeModelsFirst_BySuffixAndFlag()
+    {
+        // Arrange
+        var provider = new Provider
+        {
+            Name = "Test Provider",
+            BaseUrl = "https://api.test.com/v1",
+            ApiKey = "key",
+            IsActive = true,
+            Priority = 100,
+            Models = new List<ProviderModel>
+            {
+                new() { ModelName = "vendor/model-paid", IsEnabled = true, IsFree = false },
+                new() { ModelName = "vendor/model-free:free", IsEnabled = true, IsFree = false },
+                new() { ModelName = "vendor/model-flagged", IsEnabled = true, IsFree = true },
+                new() { ModelName = "vendor/another-paid", IsEnabled = true, IsFree = false }
+            }
+        };
+
+        _context.Providers.Add(provider);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.GetAvailableModelsAsync();
+
+        // Assert
+        result.Should().HaveCount(4);
+        result.Take(2).Select(m => m.Id).Should().BeEquivalentTo(
+            new[] { "vendor/model-flagged", "vendor/model-free:free" });
+        result.Skip(2).Select(m => m.Id).Should().Equal(
+            new[] { "vendor/another-paid", "vendor/model-paid" });
+    }
+
+    [Fact]
+    public async Task GetAvailableModelsAsync_OrdersFreeModelsAlphabetically()
+    {
+        // Arrange
+        var provider = new Provider
+        {
+            Name = "Test Provider",
+            BaseUrl = "https://api.test.com/v1",
+            ApiKey = "key",
+            IsActive = true,
+            Priority = 100,
+            Models = new List<ProviderModel>
+            {
+                new() { ModelName = "z-model:free", IsEnabled = true, IsFree = false },
+                new() { ModelName = "a-model:free", IsEnabled = true, IsFree = false },
+                new() { ModelName = "m-model:free", IsEnabled = true, IsFree = false }
+            }
+        };
+
+        _context.Providers.Add(provider);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.GetAvailableModelsAsync();
+
+        // Assert
+        result.Select(m => m.Id).Should().Equal(
+            new[] { "a-model:free", "m-model:free", "z-model:free" });
+    }
+
+    [Fact]
+    public async Task GetGroupedModelsAsync_OrdersProviderGroupModelsWithFreeFirst()
+    {
+        // Arrange
+        var provider = new Provider
+        {
+            Name = "ProviderA",
+            BaseUrl = "https://api.test.com/v1",
+            ApiKey = "key",
+            IsActive = true,
+            Priority = 100,
+            Models = new List<ProviderModel>
+            {
+                new() { ModelName = "vendor/b-paid", IsEnabled = true, IsFree = false },
+                new() { ModelName = "vendor/a-free:free", IsEnabled = true, IsFree = false },
+                new() { ModelName = "vendor/c-paid", IsEnabled = true, IsFree = false }
+            }
+        };
+
+        _context.Providers.Add(provider);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _service.GetGroupedModelsAsync();
+
+        // Assert
+        var providerGroup = result.Groups.FirstOrDefault(g => g.Type == "provider" && g.Provider == "ProviderA");
+        providerGroup.Should().NotBeNull();
+        providerGroup!.Models.Select(m => m.Id).Should().Equal(
+            new[] { "vendor/a-free:free", "vendor/b-paid", "vendor/c-paid" });
     }
 }

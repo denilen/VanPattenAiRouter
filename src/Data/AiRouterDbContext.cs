@@ -83,6 +83,9 @@ public class AiRouterDbContext : DbContext
             entity.Property(e => e.RequestsThisHour).HasDefaultValue(0);
             entity.Property(e => e.TokensThisHour).HasDefaultValue(0);
             entity.Property(e => e.LastHourReset);
+            entity.Property(e => e.RequestsThisMinute).HasDefaultValue(0);
+            entity.Property(e => e.TokensThisMinute).HasDefaultValue(0);
+            entity.Property(e => e.LastMinuteReset);
             entity.HasIndex(e => e.Name).IsUnique();
         });
 

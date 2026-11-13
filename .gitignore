@@ -615,6 +615,7 @@ Tasks
 plans
 plan/
 tests/VanPattenAIRouter.Tests/LLM-result/tests
+stream_stability_results_20261013_023849.json
 data/
 
 
