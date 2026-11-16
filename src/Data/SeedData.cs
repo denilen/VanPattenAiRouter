@@ -37,6 +37,7 @@ public static class SeedData
                     IsActive = config.IsActive,
                     Priority = config.Priority,
                     IsVirtual = config.IsVirtual,
+                    ImageTasksOnly = config.ImageTasksOnly,
                     RateLimitJson = JsonSerializer.Serialize(config.RateLimit),
                     Models = new List<ProviderModel>()
                 };

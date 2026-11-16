@@ -51,6 +51,11 @@ public class ProviderDto
     public bool IsVirtual { get; set; } = false;
 
     /// <summary>
+    ///     When true, provider is restricted to image-related tasks only.
+    /// </summary>
+    public bool ImageTasksOnly { get; set; } = false;
+
+    /// <summary>
     ///     Rate limiting configuration for this provider.
     /// </summary>
     public RateLimitConfig RateLimit { get; set; } = new();

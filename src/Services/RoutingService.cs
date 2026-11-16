@@ -594,12 +594,13 @@ public class RoutingService : IRoutingService
         using (LogContext.PushProperty("RequestId", Guid.NewGuid().ToString()[..8]))
         using (LogContext.PushProperty("EstimatedTokens", estimatedTokens))
         {
-            _logger.LogDebug("Routing chat completion request for model: {Model} (estimated tokens: {Tokens})",
-                             request.Model, estimatedTokens);
+            var includeImageOnlyProviders = IsImageRelatedChatRequest(request);
+            _logger.LogDebug("Routing chat completion request for model: {Model} (estimated tokens: {Tokens}, imageRelated: {ImageRelated})",
+                             request.Model, estimatedTokens, includeImageOnlyProviders);
 
             // Resolve provider based on model name (handles virtual providers)
             var (provider, mode, specificModel)
-                = await _providerService.ResolveAutoProviderAsync(request.Model, estimatedTokens);
+                = await _providerService.ResolveAutoProviderAsync(request.Model, estimatedTokens, includeImageOnlyProviders);
 
             if (provider == null)
             {
@@ -631,9 +632,9 @@ public class RoutingService : IRoutingService
             // Check if it's a virtual provider (VanPatten/...)
             if (provider.IsVirtual)
                 return await RouteVirtualProviderAsync(provider, request, apiKey, estimatedTokens, stopwatch, mode,
-                                                       specificModel, default);
+                                                       specificModel, includeImageOnlyProviders, default);
 
-            return await RouteToSingleProviderAsync(provider, request, apiKey, estimatedTokens, stopwatch, default);
+            return await RouteToSingleProviderAsync(provider, request, apiKey, estimatedTokens, stopwatch, includeImageOnlyProviders, default);
         }
     }
 
@@ -652,15 +653,16 @@ public class RoutingService : IRoutingService
         using (LogContext.PushProperty("EstimatedTokens", estimatedTokens))
         using (LogContext.PushProperty("Stream", true))
         {
+            var includeImageOnlyProviders = IsImageRelatedChatRequest(request);
             _logger.LogDebug(
-                "Routing streaming chat completion request for model: {Model} (estimated tokens: {Tokens})",
-                request.Model, estimatedTokens);
+                "Routing streaming chat completion request for model: {Model} (estimated tokens: {Tokens}, imageRelated: {ImageRelated})",
+                request.Model, estimatedTokens, includeImageOnlyProviders);
 
             try
             {
                 // Resolve provider based on model name
                 var (provider, mode, specificModel)
-                    = await _providerService.ResolveAutoProviderAsync(request.Model, estimatedTokens);
+                    = await _providerService.ResolveAutoProviderAsync(request.Model, estimatedTokens, includeImageOnlyProviders);
 
                 if (provider == null)
                 {
@@ -675,13 +677,13 @@ public class RoutingService : IRoutingService
                 if (provider.IsVirtual)
                 {
                     await RouteVirtualProviderStreamAsync(provider, request, apiKey, estimatedTokens, outputStream,
-                                                          stopwatch, mode, specificModel, cancellationToken);
+                                                          stopwatch, mode, specificModel, includeImageOnlyProviders, cancellationToken);
                     return;
                 }
 
                 // Single provider streaming WITH FAILOVER
                 await RouteSingleProviderStreamAsync(provider, request, apiKey, estimatedTokens, outputStream,
-                                                     stopwatch, cancellationToken);
+                                                     stopwatch, includeImageOnlyProviders, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -987,7 +989,7 @@ public class RoutingService : IRoutingService
             try
             {
                 var (provider, mode, specificModel)
-                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-3");
+                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-3", 0, includeImageOnlyProviders: true);
 
                 if (provider == null)
                 {
@@ -1013,7 +1015,7 @@ public class RoutingService : IRoutingService
                     _logger.LogWarning(
                         "Virtual provider not supported for image generation, falling back to first available provider");
                     var providers
-                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-3");
+                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-3", 0, includeImageOnlyProviders: true);
                     provider = providers.FirstOrDefault();
 
                     if (provider == null)
@@ -1058,7 +1060,7 @@ public class RoutingService : IRoutingService
             try
             {
                 var (provider, mode, specificModel)
-                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-2");
+                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-2", 0, includeImageOnlyProviders: true);
 
                 if (provider == null)
                 {
@@ -1082,7 +1084,7 @@ public class RoutingService : IRoutingService
                     _logger.LogWarning(
                         "Virtual provider not supported for image edit, falling back to first available provider");
                     var providers
-                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-2");
+                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-2", 0, includeImageOnlyProviders: true);
                     provider = providers.FirstOrDefault();
 
                     if (provider == null)
@@ -1127,7 +1129,7 @@ public class RoutingService : IRoutingService
             try
             {
                 var (provider, mode, specificModel)
-                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-2");
+                    = await _providerService.ResolveAutoProviderAsync(request.Model ?? "dall-e-2", 0, includeImageOnlyProviders: true);
 
                 if (provider == null)
                 {
@@ -1151,7 +1153,7 @@ public class RoutingService : IRoutingService
                     _logger.LogWarning(
                         "Virtual provider not supported for image variation, falling back to first available provider");
                     var providers
-                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-2");
+                        = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model ?? "dall-e-2", 0, includeImageOnlyProviders: true);
                     provider = providers.FirstOrDefault();
 
                     if (provider == null)
@@ -2947,6 +2949,7 @@ public class RoutingService : IRoutingService
         Stopwatch stopwatch,
         string mode,
         string? specificModel,
+        bool includeImageOnlyProviders,
         CancellationToken cancellationToken)
     {
         List<ProviderModel> models;
@@ -2955,17 +2958,17 @@ public class RoutingService : IRoutingService
         if (mode == "specific" && !string.IsNullOrEmpty(specificModel))
         {
             // Third mode: specific model with failover to same model on other providers
-            models = await _providerService.GetProvidersForSpecificModelAsync(specificModel, virtualProvider.Name);
+            models = await _providerService.GetProvidersForSpecificModelAsync(specificModel, virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = $"specific model '{specificModel}'";
         }
         else if (mode == "auto")
         {
-            models = await _providerService.GetAllModelsForAutoModeAsync(virtualProvider.Name);
+            models = await _providerService.GetAllModelsForAutoModeAsync(virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = "auto (all models)";
         }
         else // auto-free (default)
         {
-            models = await _providerService.GetFreeModelsForAutoModeAsync(virtualProvider.Name);
+            models = await _providerService.GetFreeModelsForAutoModeAsync(virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = "auto-free (free models only)";
         }
 
@@ -3278,6 +3281,7 @@ public class RoutingService : IRoutingService
     /// <param name="apiKey">The API key.</param>
     /// <param name="estimatedTokens">Estimated token count.</param>
     /// <param name="stopwatch">The stopwatch for timing.</param>
+    /// <param name="includeImageOnlyProviders">When true, image-only providers are eligible (image-related requests).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The chat completion response.</returns>
     private async Task<ChatCompletionResponse> RouteToSingleProviderAsync(
@@ -3286,10 +3290,11 @@ public class RoutingService : IRoutingService
         string apiKey,
         int estimatedTokens,
         Stopwatch stopwatch,
+        bool includeImageOnlyProviders,
         CancellationToken cancellationToken)
     {
         // Get ALL available providers for this model (in priority order)
-        var allProviders = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model, estimatedTokens);
+        var allProviders = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model, estimatedTokens, includeImageOnlyProviders);
 
         if (allProviders.Count == 0)
         {
@@ -3398,6 +3403,7 @@ public class RoutingService : IRoutingService
         Stopwatch stopwatch,
         string mode,
         string? specificModel,
+        bool includeImageOnlyProviders,
         CancellationToken cancellationToken)
     {
         List<ProviderModel> models;
@@ -3406,17 +3412,17 @@ public class RoutingService : IRoutingService
         if (mode == "specific" && !string.IsNullOrEmpty(specificModel))
         {
             // Third mode: specific model with failover to same model on other providers
-            models = await _providerService.GetProvidersForSpecificModelAsync(specificModel, virtualProvider.Name);
+            models = await _providerService.GetProvidersForSpecificModelAsync(specificModel, virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = $"specific model '{specificModel}'";
         }
         else if (mode == "auto")
         {
-            models = await _providerService.GetAllModelsForAutoModeAsync(virtualProvider.Name);
+            models = await _providerService.GetAllModelsForAutoModeAsync(virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = "auto (all models)";
         }
         else // auto-free (default)
         {
-            models = await _providerService.GetFreeModelsForAutoModeAsync(virtualProvider.Name);
+            models = await _providerService.GetFreeModelsForAutoModeAsync(virtualProvider.Name, includeImageOnlyProviders);
             modeDescription = "auto-free (free models only)";
         }
 
@@ -4596,10 +4602,11 @@ public class RoutingService : IRoutingService
         int estimatedTokens,
         Stream outputStream,
         Stopwatch stopwatch,
+        bool includeImageOnlyProviders,
         CancellationToken cancellationToken)
     {
         // Get ALL available providers for this model (in priority order)
-        var allProviders = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model, estimatedTokens);
+        var allProviders = await _providerService.GetAllAvailableProvidersForModelAsync(request.Model, estimatedTokens, includeImageOnlyProviders);
 
         if (allProviders.Count == 0)
         {
@@ -4973,6 +4980,95 @@ public class RoutingService : IRoutingService
         if (request.Prompt != null) dict["prompt"] = request.Prompt;
 
         return dict;
+    }
+
+    /// <summary>
+    ///     Determines whether a chat completion request is related to image tasks.
+    ///     Image-only providers (e.g. Agnes AI) are allowed only for such requests.
+    /// </summary>
+    private static bool IsImageRelatedChatRequest(ChatCompletionRequest request)
+    {
+        if (request?.Messages == null) return false;
+        foreach (var message in request.Messages)
+        {
+            if (message == null) continue;
+            if (ContainsImageContent(message.Content)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Checks whether message content contains image parts (multimodal image input).
+    /// </summary>
+    private static bool ContainsImageContent(object? content)
+    {
+        if (content == null) return false;
+        if (content is string) return false;
+
+        if (content is System.Text.Json.JsonElement el)
+            return ContainsImageContent(el);
+
+        // Fallback: serialize and inspect JSON structure
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(content);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return ContainsImageContent(doc.RootElement);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Checks whether a JSON element represents content containing image parts.
+    /// </summary>
+    private static bool ContainsImageContent(System.Text.Json.JsonElement el)
+    {
+        if (el.ValueKind == System.Text.Json.JsonValueKind.String) return false;
+
+        if (el.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            foreach (var item in el.EnumerateArray())
+            {
+                if (item.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                if (item.TryGetProperty("type", out var typeProp))
+                {
+                    var type = typeProp.GetString();
+                    if (string.Equals(type, "image_url", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(type, "input_image", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(type, "image", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+
+                // Some providers nest image data differently; detect common image markers
+                if (item.TryGetProperty("image_url", out _) || item.TryGetProperty("imageUrl", out _) ||
+                    item.TryGetProperty("input_image", out _) || item.TryGetProperty("inputImage", out _))
+                    return true;
+            }
+
+            return false;
+        }
+
+        if (el.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            if (el.TryGetProperty("type", out var typeProp))
+            {
+                var type = typeProp.GetString();
+                if (string.Equals(type, "image_url", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, "input_image", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, "image", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            if (el.TryGetProperty("image_url", out _) || el.TryGetProperty("imageUrl", out _) ||
+                el.TryGetProperty("input_image", out _) || el.TryGetProperty("inputImage", out _))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

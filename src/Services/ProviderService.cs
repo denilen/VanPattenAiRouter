@@ -62,27 +62,31 @@ public interface IProviderService
     ///     Finds a provider that offers the specified model (ignores rate limits).
     /// </summary>
     /// <param name="modelName">The model name to search for.</param>
+    /// <param name="includeImageOnlyProviders">When false, providers restricted to image tasks are excluded.</param>
     /// <returns>The provider, or null if not found.</returns>
-    Task<Provider?> FindProviderForModelAsync(string modelName);
+    Task<Provider?> FindProviderForModelAsync(string modelName, bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Finds the highest priority available provider for a model, considering rate limits.
     /// </summary>
     /// <param name="modelName">The model name to search for.</param>
     /// <param name="estimatedTokens">Estimated token count for the request.</param>
+    /// <param name="includeImageOnlyProviders">When false, providers restricted to image tasks are excluded.</param>
     /// <returns>The best available provider, or null if none available.</returns>
-    Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0);
+    Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Gets all available providers for a model, considering rate limits and estimated tokens.
     /// </summary>
     /// <param name="modelName">The model name to search for.</param>
     /// <param name="estimatedTokens">Estimated token count for the request.</param>
+    /// <param name="includeImageOnlyProviders">When false, providers restricted to image tasks are excluded.</param>
     /// <returns>A list of available providers ordered by priority.</returns>
-    Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0);
+    Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Gets all available providers that support embeddings, considering rate limits and estimated tokens.
+    ///     Embeddings are non-image tasks, so image-only providers are always excluded.
     /// </summary>
     /// <param name="estimatedTokens">Estimated token count for the request.</param>
     /// <returns>A list of available providers that have embedding models, ordered by priority.</returns>
@@ -99,24 +103,28 @@ public interface IProviderService
     ///     Gets all free models from active non-virtual providers for auto mode.
     /// </summary>
     /// <param name="virtualProviderName">The virtual provider name (default: "VanPatten").</param>
+    /// <param name="includeImageOnlyProviders">When false, models from image-only providers are excluded.</param>
     /// <returns>A list of free models ordered by provider priority.</returns>
-    Task<List<ProviderModel>> GetFreeModelsForAutoModeAsync(string virtualProviderName = "VanPatten");
+    Task<List<ProviderModel>> GetFreeModelsForAutoModeAsync(string virtualProviderName = "VanPatten", bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Gets all models from active non-virtual providers for auto mode (all models, not just free).
     /// </summary>
     /// <param name="virtualProviderName">The virtual provider name (default: "VanPatten").</param>
+    /// <param name="includeImageOnlyProviders">When false, models from image-only providers are excluded.</param>
     /// <returns>A list of all models ordered by provider priority.</returns>
-    Task<List<ProviderModel>> GetAllModelsForAutoModeAsync(string virtualProviderName = "VanPatten");
+    Task<List<ProviderModel>> GetAllModelsForAutoModeAsync(string virtualProviderName = "VanPatten", bool includeImageOnlyProviders = false);
 
     /// <summary>
-    ///     Gets providers that offer a specific free model by exact model name.
+    ///     Gets providers that offer a specific model by exact model name.
     /// </summary>
     /// <param name="modelName">The exact model name to search for.</param>
     /// <param name="virtualProviderName">The virtual provider name (default: "VanPatten").</param>
+    /// <param name="includeImageOnlyProviders">When false, models from image-only providers are excluded.</param>
     /// <returns>A list of ProviderModel entries (each with its provider) that offer this model.</returns>
     Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(string modelName,
-                                                                string virtualProviderName = "VanPatten");
+                                                                string virtualProviderName = "VanPatten",
+                                                                bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Resolves an auto provider for the given model name (supports virtual provider routing).
@@ -126,9 +134,10 @@ public interface IProviderService
     ///     "VanPatten/google/gemini-2.0-flash-exp:free").
     /// </param>
     /// <param name="estimatedTokens">Estimated token count for the request.</param>
+    /// <param name="includeImageOnlyProviders">When false, providers restricted to image tasks are excluded from normal/specific resolution.</param>
     /// <returns>A tuple of (resolved provider, mode, specificModel). Mode can be "normal", "auto-free", "auto", or "specific".</returns>
     Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(
-        string modelName, int estimatedTokens = 0);
+        string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false);
 
     /// <summary>
     ///     Records usage statistics for a provider.
@@ -193,6 +202,7 @@ public class ProviderService : IProviderService
             IsActive = p.IsActive,
             Priority = p.Priority,
             IsVirtual = p.IsVirtual,
+            ImageTasksOnly = p.ImageTasksOnly,
             RateLimit = p.RateLimit,
             UsageStats = new ProviderUsageStats
             {
@@ -242,6 +252,8 @@ public class ProviderService : IProviderService
             Headers = ParseHeaders(provider.Headers),
             IsActive = provider.IsActive,
             Priority = provider.Priority,
+            IsVirtual = provider.IsVirtual,
+            ImageTasksOnly = provider.ImageTasksOnly,
             RateLimit = provider.RateLimit,
             UsageStats = new ProviderUsageStats
             {
@@ -274,6 +286,8 @@ public class ProviderService : IProviderService
             Headers = SerializeHeaders(providerDto.Headers),
             IsActive = providerDto.IsActive,
             Priority = providerDto.Priority,
+            IsVirtual = providerDto.IsVirtual,
+            ImageTasksOnly = providerDto.ImageTasksOnly,
             RateLimitJson = JsonSerializer.Serialize(providerDto.RateLimit),
             Models = providerDto.Models.Select(m => new ProviderModel
             {
@@ -315,6 +329,8 @@ public class ProviderService : IProviderService
         provider.Headers = SerializeHeaders(providerDto.Headers);
         provider.IsActive = providerDto.IsActive;
         provider.Priority = providerDto.Priority;
+        provider.IsVirtual = providerDto.IsVirtual;
+        provider.ImageTasksOnly = providerDto.ImageTasksOnly;
         provider.RateLimitJson = JsonSerializer.Serialize(providerDto.RateLimit);
         provider.UpdatedAt = DateTime.UtcNow;
 
@@ -373,14 +389,14 @@ public class ProviderService : IProviderService
 
         var models = await _context.ProviderModels
                                    .Include(m => m.Provider)
-                                   .Where(m => m.IsEnabled && m.Provider.IsActive)
+                                   .Where(m => m.IsEnabled && m.Provider.IsActive && !m.Provider.ImageTasksOnly)
                                    .OrderByDescending(m => m.Provider.Priority)
                                    .Select(m => new { m.ModelName, m.Provider, m.IsFree })
                                    .ToListAsync();
 
-        // Filter out rate-limited providers in memory using IsRateLimited property
+        // Filter out rate-limited and image-only providers in memory using IsRateLimited property
         var availableModels = models
-                             .Where(m => !m.Provider.IsRateLimited)
+                             .Where(m => !m.Provider.IsRateLimited && !m.Provider.ImageTasksOnly)
                              .Select(m => new ModelInfo
                              {
                                  Id = m.ModelName,
@@ -437,14 +453,14 @@ public class ProviderService : IProviderService
 
         var models = await _context.ProviderModels
                                    .Include(m => m.Provider)
-                                   .Where(m => m.IsEnabled && m.Provider.IsActive)
+                                   .Where(m => m.IsEnabled && m.Provider.IsActive && !m.Provider.ImageTasksOnly)
                                    .OrderByDescending(m => m.Provider.Priority)
                                    .Select(m => new { m.ModelName, m.Provider, m.IsFree })
                                    .ToListAsync();
 
-        // Filter out rate-limited providers in memory using IsRateLimited property
+        // Filter out rate-limited and image-only providers in memory using IsRateLimited property
         var availableModels = models
-                             .Where(m => !m.Provider.IsRateLimited)
+                             .Where(m => !m.Provider.IsRateLimited && !m.Provider.ImageTasksOnly)
                              .ToList();
 
         // Get distinct models (by ModelName) with their providers and free status
@@ -591,16 +607,18 @@ public class ProviderService : IProviderService
     }
 
     /// <inheritdoc />
-    public async Task<Provider?> FindProviderForModelAsync(string modelName)
+    public async Task<Provider?> FindProviderForModelAsync(string modelName, bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Finding provider for model: {ModelName}", modelName);
+        _logger.LogDebug("Finding provider for model: {ModelName} (includeImageOnlyProviders: {IncludeImageOnly})",
+                         modelName, includeImageOnlyProviders);
 
         // Match exact or by suffix (e.g., "openai/gpt-4o-mini" matches "gpt-4o-mini")
         var providerModel = await _context.ProviderModels
                                           .Include(m => m.Provider)
                                           .Where(m => (m.ModelName == modelName
                                                          || m.ModelName.EndsWith("/" + modelName)) && m.IsEnabled
-                                                     && m.Provider.IsActive)
+                                                     && m.Provider.IsActive
+                                                     && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                           .OrderByDescending(m => m.Provider.Priority)
                                           .FirstOrDefaultAsync();
 
@@ -649,10 +667,10 @@ public class ProviderService : IProviderService
     }
 
     /// <inheritdoc />
-    public async Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0)
+    public async Task<Provider?> FindAvailableProviderForModelAsync(string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Finding available provider for model: {ModelName} (estimated tokens: {Tokens})", modelName,
-                         estimatedTokens);
+        _logger.LogDebug("Finding available provider for model: {ModelName} (estimated tokens: {Tokens}, includeImageOnlyProviders: {IncludeImageOnly})",
+                         modelName, estimatedTokens, includeImageOnlyProviders);
 
         // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
@@ -661,13 +679,20 @@ public class ProviderService : IProviderService
         var providers = await _context.ProviderModels
                                       .Include(m => m.Provider)
                                       .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
-                                                 && m.IsEnabled && m.Provider.IsActive)
+                                                 && m.IsEnabled && m.Provider.IsActive
+                                                 && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                       .OrderByDescending(m => m.Provider.Priority)
                                       .Select(m => m.Provider)
                                       .ToListAsync();
 
         foreach (var provider in providers)
         {
+            if (!includeImageOnlyProviders && provider.ImageTasksOnly)
+            {
+                _logger.LogDebug("Skipping image-only provider for non-image request: {ProviderName}", provider.Name);
+                continue;
+            }
+
             // Check rate limits using IsRateLimited property (which now relies on pre-reset)
             if (!provider.IsRateLimited)
             {
@@ -687,15 +712,15 @@ public class ProviderService : IProviderService
             _logger.LogDebug("Skipping rate-limited provider: {ProviderName}", provider.Name);
         }
 
-        _logger.LogWarning("No available provider found for model: {ModelName} (all rate limited)", modelName);
+        _logger.LogWarning("No available provider found for model: {ModelName} (all rate limited or excluded)", modelName);
         return null;
     }
 
     /// <inheritdoc />
-    public async Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0)
+    public async Task<List<Provider>> GetAllAvailableProvidersForModelAsync(string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Getting all available providers for model: {ModelName} (estimated tokens: {Tokens})",
-                         modelName, estimatedTokens);
+        _logger.LogDebug("Getting all available providers for model: {ModelName} (estimated tokens: {Tokens}, includeImageOnlyProviders: {IncludeImageOnly})",
+                         modelName, estimatedTokens, includeImageOnlyProviders);
 
         // Reset daily/hourly/minute usage if needed
         await ResetDailyUsageIfNeededAsync();
@@ -704,14 +729,23 @@ public class ProviderService : IProviderService
         var providers = await _context.ProviderModels
                                       .Include(m => m.Provider)
                                       .Where(m => (m.ModelName == modelName || m.ModelName.EndsWith("/" + modelName))
-                                                 && m.IsEnabled && m.Provider.IsActive)
+                                                 && m.IsEnabled && m.Provider.IsActive
+                                                 && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                       .OrderByDescending(m => m.Provider.Priority)
                                       .Select(m => m.Provider)
+                                      .Distinct()
                                       .ToListAsync();
 
         var availableProviders = new List<Provider>();
 
         foreach (var provider in providers)
+        {
+            if (!includeImageOnlyProviders && provider.ImageTasksOnly)
+            {
+                _logger.LogDebug("Skipping image-only provider for non-image request: {ProviderName}", provider.Name);
+                continue;
+            }
+
             // Check rate limits using IsRateLimited property
             if (!provider.IsRateLimited)
             {
@@ -731,6 +765,7 @@ public class ProviderService : IProviderService
             {
                 _logger.LogDebug("Skipping rate-limited provider: {ProviderName}", provider.Name);
             }
+        }
 
         _logger.LogInformation("Found {Count} available providers for model: {ModelName}", availableProviders.Count,
                                modelName);
@@ -750,7 +785,8 @@ public class ProviderService : IProviderService
         var providers = await _context.ProviderModels
                                       .Include(m => m.Provider)
                                       .Where(m => EF.Functions.Like(m.ModelName, "%embedding%")
-                                                 && m.IsEnabled && m.Provider.IsActive)
+                                                 && m.IsEnabled && m.Provider.IsActive
+                                                 && !m.Provider.ImageTasksOnly)
                                       .OrderByDescending(m => m.Provider.Priority)
                                       .Select(m => m.Provider)
                                       .Distinct()
@@ -762,6 +798,12 @@ public class ProviderService : IProviderService
             // Check rate limits using IsRateLimited property
             if (!provider.IsRateLimited)
             {
+                if (provider.ImageTasksOnly)
+                {
+                    _logger.LogDebug("Skipping image-only provider for embedding request: {ProviderName}", provider.Name);
+                    continue;
+                }
+
                 if (WouldExceedConfiguredLimits(provider, estimatedTokens))
                 {
                     _logger.LogWarning(
@@ -970,10 +1012,10 @@ public class ProviderService : IProviderService
     }
 
     /// <inheritdoc />
-    public async Task<List<ProviderModel>> GetFreeModelsForAutoModeAsync(string virtualProviderName = "VanPatten")
+    public async Task<List<ProviderModel>> GetFreeModelsForAutoModeAsync(string virtualProviderName = "VanPatten", bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Getting free models for auto mode from virtual provider: {ProviderName}",
-                         virtualProviderName);
+        _logger.LogDebug("Getting free models for auto mode from virtual provider: {ProviderName} (includeImageOnlyProviders: {IncludeImageOnly})",
+                         virtualProviderName, includeImageOnlyProviders);
 
         var virtualProvider = await GetVirtualProviderAsync(virtualProviderName);
         if (virtualProvider == null) return new List<ProviderModel>();
@@ -985,7 +1027,8 @@ public class ProviderService : IProviderService
                                                   && m.IsFree
                                                   && m.Provider.IsActive
                                                   && !m.Provider.IsVirtual
-                                                  && m.Provider.Type != "virtual")
+                                                  && m.Provider.Type != "virtual"
+                                                  && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                        .OrderByDescending(m => m.Provider.Priority)
                                        .ToListAsync();
 
@@ -994,10 +1037,10 @@ public class ProviderService : IProviderService
     }
 
     /// <inheritdoc />
-    public async Task<List<ProviderModel>> GetAllModelsForAutoModeAsync(string virtualProviderName = "VanPatten")
+    public async Task<List<ProviderModel>> GetAllModelsForAutoModeAsync(string virtualProviderName = "VanPatten", bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Getting all models for auto mode from virtual provider: {ProviderName}",
-                         virtualProviderName);
+        _logger.LogDebug("Getting all models for auto mode from virtual provider: {ProviderName} (includeImageOnlyProviders: {IncludeImageOnly})",
+                         virtualProviderName, includeImageOnlyProviders);
 
         var virtualProvider = await GetVirtualProviderAsync(virtualProviderName);
         if (virtualProvider == null) return new List<ProviderModel>();
@@ -1008,7 +1051,8 @@ public class ProviderService : IProviderService
                                       .Where(m => m.IsEnabled
                                                  && m.Provider.IsActive
                                                  && !m.Provider.IsVirtual
-                                                 && m.Provider.Type != "virtual")
+                                                 && m.Provider.Type != "virtual"
+                                                 && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                       .OrderByDescending(m => m.Provider.Priority)
                                       .ToListAsync();
 
@@ -1018,9 +1062,10 @@ public class ProviderService : IProviderService
 
     /// <inheritdoc />
     public async Task<List<ProviderModel>> GetProvidersForSpecificModelAsync(
-        string modelName, string virtualProviderName = "VanPatten")
+        string modelName, string virtualProviderName = "VanPatten", bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Getting providers for specific model: {ModelName}", modelName);
+        _logger.LogDebug("Getting providers for specific model: {ModelName} (includeImageOnlyProviders: {IncludeImageOnly})",
+                         modelName, includeImageOnlyProviders);
 
         var virtualProvider = await GetVirtualProviderAsync(virtualProviderName);
         if (virtualProvider == null) return new List<ProviderModel>();
@@ -1033,7 +1078,8 @@ public class ProviderService : IProviderService
                                               && m.ModelName == modelName
                                               && m.Provider.IsActive
                                               && !m.Provider.IsVirtual
-                                              && m.Provider.Type != "virtual")
+                                              && m.Provider.Type != "virtual"
+                                              && (includeImageOnlyProviders || !m.Provider.ImageTasksOnly))
                                    .OrderByDescending(m => m.Provider.Priority)
                                    .ToListAsync();
 
@@ -1043,9 +1089,10 @@ public class ProviderService : IProviderService
 
     /// <inheritdoc />
     public async Task<(Provider? Provider, string Mode, string? SpecificModel)> ResolveAutoProviderAsync(
-        string modelName, int estimatedTokens = 0)
+        string modelName, int estimatedTokens = 0, bool includeImageOnlyProviders = false)
     {
-        _logger.LogDebug("Resolving auto provider for model: {ModelName}", modelName);
+        _logger.LogDebug("Resolving auto provider for model: {ModelName} (includeImageOnlyProviders: {IncludeImageOnly})",
+                         modelName, includeImageOnlyProviders);
 
         // Check if it's a virtual provider request (VanPatten/...)
         if (modelName.StartsWith("VanPatten/") || modelName.StartsWith("VanPatten\\"))
@@ -1078,7 +1125,7 @@ public class ProviderService : IProviderService
             _logger.LogInformation("Specific model mode requested: {Model}", specificModel);
 
             // Check if any provider has this model and is available
-            var availableProviders = await GetAllAvailableProvidersForModelAsync(specificModel, estimatedTokens);
+            var availableProviders = await GetAllAvailableProvidersForModelAsync(specificModel, estimatedTokens, includeImageOnlyProviders);
             if (availableProviders.Count == 0)
             {
                 _logger.LogWarning("No available provider for specific model: {Model}", specificModel);
@@ -1089,7 +1136,7 @@ public class ProviderService : IProviderService
         }
 
         // For regular models, use existing logic
-        var provider = await FindAvailableProviderForModelAsync(modelName, estimatedTokens);
+        var provider = await FindAvailableProviderForModelAsync(modelName, estimatedTokens, includeImageOnlyProviders);
         return (provider, "normal", null);
     }
 

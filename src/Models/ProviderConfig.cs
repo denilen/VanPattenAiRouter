@@ -46,6 +46,17 @@ public class ProviderConfig
     public bool IsVirtual { get; set; } = false;
 
     /// <summary>
+    ///     Whether this provider supports image-related capabilities (informational/config flag).
+    /// </summary>
+    public bool SupportsImages { get; set; } = false;
+
+    /// <summary>
+    ///     When true, provider is eligible only for image-related tasks and must not be used
+    ///     for non-image requests.
+    /// </summary>
+    public bool ImageTasksOnly { get; set; } = false;
+
+    /// <summary>
     ///     Rate limiting configuration for this provider.
     /// </summary>
     public RateLimitConfig RateLimit { get; set; } = new();

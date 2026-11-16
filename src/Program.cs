@@ -121,6 +121,29 @@ using (var scope = app.Services.CreateScope())
 
     db.Database.EnsureCreated();
 
+    // Schema compatibility for existing databases (EnsureCreated does not alter existing tables)
+    try
+    {
+        db.Database.ExecuteSqlRaw(
+            "ALTER TABLE Providers ADD COLUMN ImageTasksOnly INTEGER NOT NULL DEFAULT 0;");
+        Log.Information("Applied schema compatibility: added Providers.ImageTasksOnly column");
+    }
+    catch (Exception ex)
+    {
+        // Column likely already exists; ignore to keep startup idempotent
+        Log.Debug(ex, "Schema compatibility: Providers.ImageTasksOnly column already exists or could not be added");
+    }
+
+    try
+    {
+        // Enforce image-only routing for Agnes AI in existing persistent DBs without touching API keys
+        db.Database.ExecuteSqlRaw("UPDATE Providers SET ImageTasksOnly = 1 WHERE Name = 'Agnes AI';");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Schema compatibility: failed to enforce ImageTasksOnly for Agnes AI provider");
+    }
+
     // Seed default providers if none exist
     await SeedData.InitializeAsync(db, appOptionsMonitor);
 }

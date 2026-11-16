@@ -55,7 +55,7 @@ public class RoutingServiceVirtualProviderTests : IDisposable
 
         // Setup GetFreeModelsForAutoModeAsync for the virtual provider name used in tests
         _mockProviderService
-           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(new List<ProviderModel>());
 
         _service = new RoutingService(_mockProviderService.Object, httpClientFactory.Object,
@@ -106,11 +106,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
         };
 
         _mockProviderService
-           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync((virtualProvider, "auto", (string?)null));
 
         _mockProviderService
-           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync(new List<Provider> { freeProvider });
 
         // Setup free models for auto-free mode
@@ -128,7 +128,7 @@ public class RoutingServiceVirtualProviderTests : IDisposable
             }
         };
         _mockProviderService
-           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(freeModels);
 
         var successResponse = new ChatCompletionResponse
@@ -166,14 +166,14 @@ public class RoutingServiceVirtualProviderTests : IDisposable
                                                       {
                                                           typeof(Provider), typeof(ChatCompletionRequest),
                                                           typeof(string), typeof(int), typeof(Stopwatch),
-                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                          typeof(string), typeof(string), typeof(bool), typeof(CancellationToken)
                                                       },
                                                       null);
         var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
                                                                         new object[]
                                                                         {
                                                                             virtualProvider, request, "test-key", 0,
-                                                                            Stopwatch.StartNew(), "auto-free", null,
+                                                                            Stopwatch.StartNew(), "auto-free", null, false,
                                                                             CancellationToken.None
                                                                         })!;
 
@@ -219,11 +219,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
         };
 
         _mockProviderService
-           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-all", It.IsAny<int>()))
+           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-all", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync((virtualProvider, "auto", (string?)null));
 
         _mockProviderService
-           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-all", It.IsAny<int>()))
+           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-all", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync(new List<Provider> { highPriorityProvider });
 
         // Setup models for auto-all mode (mode="auto" uses GetAllModelsForAutoModeAsync)
@@ -241,11 +241,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
             }
         };
         _mockProviderService
-           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(freeModelsAll);
 
         _mockProviderService
-           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(freeModelsAll);
 
         var successResponse = new ChatCompletionResponse
@@ -283,14 +283,14 @@ public class RoutingServiceVirtualProviderTests : IDisposable
                                                       {
                                                           typeof(Provider), typeof(ChatCompletionRequest),
                                                           typeof(string), typeof(int), typeof(Stopwatch),
-                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                          typeof(string), typeof(string), typeof(bool), typeof(CancellationToken)
                                                       },
                                                       null);
         var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
                                                                         new object[]
                                                                         {
                                                                             virtualProvider, request, "test-key", 0,
-                                                                            Stopwatch.StartNew(), "auto", null,
+                                                                            Stopwatch.StartNew(), "auto", null, false,
                                                                             CancellationToken.None
                                                                         })!;
 
@@ -328,11 +328,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
         };
 
         _mockProviderService
-           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync((virtualProvider, "auto", (string?)null));
 
         _mockProviderService
-           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync(new List<Provider> { streamProvider });
 
         // Setup models for auto mode (mode="auto" uses GetAllModelsForAutoModeAsync)
@@ -350,7 +350,7 @@ public class RoutingServiceVirtualProviderTests : IDisposable
             }
         };
         _mockProviderService
-           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(streamModels);
 
         var streamResponse
@@ -375,14 +375,14 @@ public class RoutingServiceVirtualProviderTests : IDisposable
                                                           typeof(Provider), typeof(ChatCompletionRequest),
                                                           typeof(string), typeof(int), typeof(Stream),
                                                           typeof(Stopwatch), typeof(string), typeof(string),
-                                                          typeof(CancellationToken)
+                                                          typeof(bool), typeof(CancellationToken)
                                                       },
                                                       null);
         await (Task)method!.Invoke(_service,
                                    new object[]
                                    {
                                        virtualProvider, request, "test-key", 0, outputStream, Stopwatch.StartNew(),
-                                       "auto", null, CancellationToken.None
+                                       "auto", null, false, CancellationToken.None
                                    })!;
 
         // Assert
@@ -410,21 +410,21 @@ public class RoutingServiceVirtualProviderTests : IDisposable
 
         // No available providers
         _mockProviderService
-           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync((virtualProvider, "auto", (string?)null));
 
         _mockProviderService
-           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync(new List<Provider>());
 
         // Setup empty models for auto mode (mode="auto" uses GetAllModelsForAutoModeAsync)
         _mockProviderService
-           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(new List<ProviderModel>());
 
         // Setup empty free models for auto-free mode (to trigger the error)
         _mockProviderService
-           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(new List<ProviderModel>());
 
         var request = new ChatCompletionRequest
@@ -441,14 +441,14 @@ public class RoutingServiceVirtualProviderTests : IDisposable
                                                       {
                                                           typeof(Provider), typeof(ChatCompletionRequest),
                                                           typeof(string), typeof(int), typeof(Stopwatch),
-                                                          typeof(string), typeof(string), typeof(CancellationToken)
+                                                          typeof(string), typeof(string), typeof(bool), typeof(CancellationToken)
                                                       },
                                                       null);
         var result = await (Task<ChatCompletionResponse>)method!.Invoke(_service,
                                                                         new object[]
                                                                         {
                                                                             virtualProvider, request, "test-key", 0,
-                                                                            Stopwatch.StartNew(), "auto-free", null,
+                                                                            Stopwatch.StartNew(), "auto-free", null, false,
                                                                             CancellationToken.None
                                                                         })!;
 
@@ -492,11 +492,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
         };
 
         _mockProviderService
-           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.ResolveAutoProviderAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync((virtualProvider, "auto", (string?)null));
 
         _mockProviderService
-           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>()))
+           .Setup(s => s.GetAllAvailableProvidersForModelAsync("VanPatten/auto-free", It.IsAny<int>(), It.IsAny<bool>()))
            .ReturnsAsync(new List<Provider> { freeProvider });
 
         // Setup models for auto mode (ResolveAutoProviderAsync returns "auto")
@@ -514,11 +514,11 @@ public class RoutingServiceVirtualProviderTests : IDisposable
             }
         };
         _mockProviderService
-           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetAllModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(freeModels);
 
         _mockProviderService
-           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router"))
+           .Setup(s => s.GetFreeModelsForAutoModeAsync("VanPatten Router", It.IsAny<bool>()))
            .ReturnsAsync(freeModels);
 
         var successResponse = new ChatCompletionResponse

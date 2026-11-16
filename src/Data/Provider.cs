@@ -64,6 +64,11 @@ public class Provider
     public bool IsVirtual { get; set; }
 
     /// <summary>
+    ///     When true, provider can be used only for image-related tasks.
+    /// </summary>
+    public bool ImageTasksOnly { get; set; }
+
+    /// <summary>
     ///     Rate limit configuration serialized as JSON.
     /// </summary>
     public string RateLimitJson { get; set; } = "{}";

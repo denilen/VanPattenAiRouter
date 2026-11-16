@@ -77,6 +77,7 @@ public class AiRouterDbContext : DbContext
             entity.Property(e => e.Type).HasMaxLength(50);
             entity.Property(e => e.Headers).HasMaxLength(2000);
             entity.Property(e => e.RateLimitJson).HasMaxLength(1000);
+            entity.Property(e => e.ImageTasksOnly).HasDefaultValue(false);
             entity.Property(e => e.RequestsToday).HasDefaultValue(0);
             entity.Property(e => e.TokensToday).HasDefaultValue(0);
             entity.Property(e => e.LastResetDate);
